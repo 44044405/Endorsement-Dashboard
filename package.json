@@ -1,0 +1,14 @@
+{
+  "name": "endorsement-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Endorsement Dashboard — team-shared, Supabase-backed (Chin Hock Agency)",
+  "main": "web-server.js",
+  "scripts": {
+    "start": "node web-server.js",
+    "start:web": "node web-server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.1"
+  }
+}

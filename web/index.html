@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Endorsement Dashboard</title>
+<link rel="icon" type="image/jpeg" href="chinhock-logo.jpg">
+<link rel="apple-touch-icon" href="chinhock-logo.jpg">
+<meta name="theme-color" content="#16273f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Endorsement">
+
+<style>
+:root{
+  --navy:#16273f; --navy-2:#1f3656; --navy-3:#2c4a73; --navy-soft:#3d5a82;
+  --ink:#16273f; --ink-soft:#566476; --ink-faint:#8593a3;
+  --line:rgba(40,70,110,.14);
+  --accent:#2c4a73;
+  --glass:rgba(255,255,255,.6); --glass-strong:rgba(255,255,255,.82);
+  --radius:20px; --radius-sm:13px;
+  --shadow:0 8px 28px rgba(22,39,63,.1), inset 0 1px 1px rgba(255,255,255,.7);
+  --shadow-lift:0 16px 42px rgba(22,39,63,.18), inset 0 1px 1px rgba(255,255,255,.85);
+  --e-new:#3d5a82;--e-new-bg:rgba(61,90,130,.15);
+  --e-followup:#b16f62;--e-followup-bg:rgba(177,111,98,.16);
+  --e-submitted:#4a90a4;--e-submitted-bg:rgba(74,144,164,.16);
+  --e-pendingdone:#a8843f;--e-pendingdone-bg:rgba(168,132,63,.15);
+  --e-pendingpay:#5b62a6;--e-pendingpay-bg:rgba(91,98,166,.15);
+  --e-pendingletter:#9a8255;--e-pendingletter-bg:rgba(173,148,98,.16);
+  --e-done:#5f8a5f;--e-done-bg:rgba(95,138,95,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  color:var(--ink);
+  background:
+    radial-gradient(1100px 700px at 8% -10%, #d8e4f2 0%, transparent 55%),
+    radial-gradient(1000px 800px at 100% 0%, #e3e2ef 0%, transparent 50%),
+    radial-gradient(900px 700px at 60% 120%, #dde9e6 0%, transparent 55%),
+    linear-gradient(180deg,#eaeff5,#e3e9f1);
+  background-attachment:fixed;-webkit-font-smoothing:antialiased;
+}
+.glass{background:var(--glass);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);
+  border:1px solid rgba(255,255,255,.72);box-shadow:var(--shadow)}
+.lift{transition:transform .28s cubic-bezier(.2,.9,.25,1),box-shadow .28s ease;cursor:pointer}
+.lift:hover{transform:scale(1.012) translateY(-2px);box-shadow:var(--shadow-lift);background:var(--glass-strong)}
+.lift:active{transform:scale(.992)}
+
+.app{display:flex;min-height:100vh}
+.sidebar{width:236px;flex-shrink:0;position:sticky;top:0;height:100vh;padding:22px 16px;
+  display:flex;flex-direction:column;gap:5px;
+  background:linear-gradient(170deg,rgba(31,54,86,.94),rgba(18,32,52,.96));
+  backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);
+  border-right:1px solid rgba(255,255,255,.1);box-shadow:6px 0 30px rgba(22,39,63,.16)}
+.sb-brand{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:4px 4px 16px}
+.sb-logo-img{width:100%;display:block;background:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.sb-cap{font-size:10px;font-weight:700;color:rgba(255,255,255,.55);text-align:center;letter-spacing:.6px;text-transform:uppercase}
+.nav-i{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:13px;cursor:pointer;
+  color:rgba(255,255,255,.72);font-size:13.5px;font-weight:540;transition:.2s;border:1px solid transparent}
+.nav-i .ic{width:19px;text-align:center;font-size:15px;opacity:.9}
+.nav-i:hover{background:rgba(255,255,255,.08);color:#fff}
+.nav-i.on{background:rgba(255,255,255,.14);color:#fff;border-color:rgba(255,255,255,.1);box-shadow:inset 0 1px 1px rgba(255,255,255,.12)}
+.nav-i .badge{margin-left:auto;font-size:10.5px;font-weight:700;background:var(--e-followup);color:#fff;border-radius:9px;padding:1px 7px;min-width:18px;text-align:center}
+.sb-new{margin-top:8px;border:0;cursor:pointer;font:inherit;font-size:13.5px;font-weight:600;color:#fff;padding:12px;border-radius:13px;
+  background:linear-gradient(145deg,#4a72a8,#345788);box-shadow:0 4px 14px rgba(0,0,0,.22),inset 0 1px 1px rgba(255,255,255,.25);transition:.2s}
+.sb-new:hover{transform:translateY(-1px)}
+.sb-foot{margin-top:auto;display:flex;flex-wrap:wrap;gap:8px;padding-top:14px}
+.sb-foot button{flex:1;border:0;background:rgba(255,255,255,.1);color:rgba(255,255,255,.8);cursor:pointer;font:inherit;font-size:11.5px;font-weight:560;padding:9px;border-radius:11px;transition:.2s}
+.whoami{width:100%;text-align:center;font-size:10.5px;color:rgba(255,255,255,.55);cursor:pointer;padding:4px;text-decoration:underline dotted}
+.whoami:hover{color:rgba(255,255,255,.85)}
+.sb-foot button:hover{background:rgba(255,255,255,.18)}
+
+.content{flex:1;min-width:0;padding:26px 30px 70px}
+.c-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.c-head .titles h2{font-size:24px;font-weight:700;letter-spacing:-.5px;color:var(--navy)}
+.c-head .titles p{font-size:13px;color:var(--ink-soft);margin-top:3px}
+.c-head .today{text-align:right;font-size:12px;color:var(--ink-soft)}
+.c-head .today b{display:block;font-size:14px;color:var(--navy);font-weight:640}
+
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.metric{border-radius:var(--radius);padding:16px 18px}
+.metric .mlab{font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.metric .mval{font-size:28px;font-weight:760;letter-spacing:-1px;color:var(--navy);font-variant-numeric:tabular-nums}
+.metric .msub{font-size:11.5px;color:var(--ink-faint);margin-top:4px}
+.metric.m-attn .mval{color:var(--e-followup)}
+.metric.m-prog .mval{color:var(--e-submitted)}
+.metric.m-done .mval{color:var(--e-done)}
+
+.filters{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.filters select{font:inherit;font-size:13.5px;font-weight:560;color:var(--navy);background:var(--glass-strong);border:1px solid rgba(255,255,255,.7);border-radius:12px;padding:10px 14px;cursor:pointer;box-shadow:var(--shadow);outline:none}
+.co-filter{position:relative;flex:1;min-width:190px;max-width:320px}
+.co-filter input{width:100%;border:1px solid var(--line);border-radius:12px;padding:11px 14px;font-size:13.5px;background:#fff;color:var(--ink)}
+.co-filter input:focus{outline:2px solid var(--accent);outline-offset:1px}
+.co-filter .clr{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:15px;padding:2px 5px}
+.seg{display:inline-flex;flex-wrap:wrap;gap:3px;background:var(--glass-strong);border:1px solid rgba(255,255,255,.7);border-radius:12px;padding:3px;box-shadow:var(--shadow)}
+.seg button{border:0;background:transparent;font:inherit;font-size:12.5px;font-weight:560;color:var(--ink-soft);padding:7px 13px;border-radius:9px;cursor:pointer;transition:.2s;white-space:nowrap}
+.seg button.on{background:linear-gradient(145deg,#3d5a82,#2c4a73);color:#fff}
+.stabs{margin-bottom:16px}
+
+.sect-head{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin:18px 2px 8px;display:flex;align-items:center;gap:8px}
+.sect-head .cnt{background:rgba(40,70,110,.08);border-radius:9px;padding:1px 8px;font-size:11px}
+.list{display:flex;flex-direction:column;gap:10px}
+.card{border-radius:var(--radius);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-left:4px solid var(--line)}
+.card.st-new{border-left-color:var(--e-new)}
+.card.st-followup{border-left-color:var(--e-followup)}
+.card.st-submitted{border-left-color:var(--e-submitted)}
+.card.st-pendingdone{border-left-color:var(--e-pendingdone)}
+.card.st-pendingpay{border-left-color:var(--e-pendingpay)}
+.card.st-pendingletter{border-left-color:var(--e-pendingletter)}
+.card.st-done{border-left-color:var(--e-done);opacity:.78}
+.cmain{flex:1;min-width:0}
+.cmain h3{font-size:16px;font-weight:660;color:var(--navy);display:inline}
+.type-pill{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;font-weight:600;background:rgba(44,74,115,.1);color:var(--navy)}
+.cmeta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.tag{font-size:11.5px;color:var(--ink-soft);background:rgba(255,255,255,.55);border:1px solid var(--line);border-radius:8px;padding:3px 9px;display:inline-flex;gap:5px;align-items:center}
+.tag b{color:var(--ink);font-weight:600}
+.cdesc{font-size:12.5px;color:var(--ink-soft);margin-top:8px;border-left:3px solid var(--line);padding-left:9px;white-space:pre-line}
+.cright{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.status-badge{font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:20px;white-space:nowrap}
+.b-new{background:var(--e-new-bg);color:var(--e-new)}
+.b-followup{background:var(--e-followup-bg);color:var(--e-followup)}
+.b-submitted{background:var(--e-submitted-bg);color:var(--e-submitted)}
+.b-pendingdone{background:var(--e-pendingdone-bg);color:var(--e-pendingdone)}
+.b-pendingpay{background:var(--e-pendingpay-bg);color:var(--e-pendingpay)}
+.b-pendingletter{background:var(--e-pendingletter-bg);color:var(--e-pendingletter)}
+.b-done{background:var(--e-done-bg);color:var(--e-done)}
+.cage{font-size:11px;color:var(--ink-faint)}
+
+.empty{text-align:center;color:var(--ink-soft);padding:48px 20px;border-radius:var(--radius)}
+.empty .ic{font-size:30px;opacity:.5;margin-bottom:8px}
+
+.scrim{position:fixed;inset:0;background:rgba(22,39,63,.36);backdrop-filter:blur(3px);opacity:0;pointer-events:none;transition:.3s;z-index:40}
+.scrim.show{opacity:1;pointer-events:auto}
+.sheet{position:fixed;top:0;right:0;height:100%;width:min(560px,100%);z-index:50;
+  background:rgba(247,250,253,.93);backdrop-filter:blur(30px) saturate(180%);-webkit-backdrop-filter:blur(30px) saturate(180%);
+  border-left:1px solid rgba(255,255,255,.7);box-shadow:-20px 0 60px rgba(22,39,63,.22);
+  transform:translateX(102%);transition:transform .38s cubic-bezier(.22,.85,.25,1);overflow-y:auto}
+.sheet.show{transform:translateX(0)}
+.sheet-h{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:18px 22px;background:rgba(247,250,253,.82);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.sheet-h h2{font-size:19px;font-weight:700;letter-spacing:-.3px;color:var(--navy)}
+.sheet-h .sub{font-size:12.5px;color:var(--ink-soft);margin-top:1px}
+.x{border:0;background:rgba(40,70,110,.1);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:17px;color:var(--ink-soft);transition:.2s}
+.x:hover{background:rgba(40,70,110,.18)}
+.sheet-h-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.hsave{border:0;cursor:pointer;font:inherit;font-size:13px;font-weight:650;color:#fff;padding:9px 16px;border-radius:11px;background:linear-gradient(145deg,#4a72a8,#345788);box-shadow:0 4px 12px rgba(44,74,115,.28);transition:.2s}
+.hsave:hover{transform:translateY(-1px)}.hsave:active{transform:scale(.97)}
+.sheet-b{padding:20px 22px 50px}
+.sect{margin-bottom:14px;background:rgba(255,255,255,.5);border:1px solid var(--line);border-radius:16px;padding:15px 16px 5px;box-shadow:0 1px 3px rgba(22,39,63,.04)}
+.sect>label.h{display:block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--navy);margin:0 0 13px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.fld{margin-bottom:11px}
+.fld label{display:block;font-size:12px;color:var(--ink-soft);margin:0 2px 5px;font-weight:550}
+.fld input,.fld select,.fld textarea{width:100%;font:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:12px;padding:11px 13px;transition:.2s;outline:none}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--navy-soft);background:#fff;box-shadow:0 0 0 3.5px rgba(44,74,115,.16)}
+.fld textarea{resize:vertical;min-height:62px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
+.hint{font-size:11px;color:var(--ink-faint);margin:4px 2px 0}
+.openlink{float:right;font-size:11px;color:var(--accent);font-weight:700;text-decoration:none}
+.bigbtn{width:100%;border:0;cursor:pointer;font:inherit;font-size:14px;font-weight:620;color:#fff;padding:13px;border-radius:14px;background:linear-gradient(145deg,#4a72a8,#345788);box-shadow:0 6px 16px rgba(44,74,115,.28);transition:.2s;margin-top:4px}
+.bigbtn:hover{transform:translateY(-1px)}.bigbtn:active{transform:scale(.99)}
+.bigbtn.danger{background:rgba(177,111,98,.14);color:var(--e-followup);box-shadow:none;margin-top:10px}
+.mini{border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:600;padding:9px 14px;border-radius:11px;transition:.2s;background:rgba(40,70,110,.1);color:var(--navy)}
+.mini:hover{background:rgba(40,70,110,.18)}
+.mini.go{background:linear-gradient(145deg,#4a72a8,#345788);color:#fff}
+.mini.undo{background:rgba(40,70,110,.12);color:var(--ink-soft)}
+.import-btn{display:block;width:100%;text-align:center;background:var(--navy);color:#fff;box-shadow:var(--shadow)}
+.import-btn:hover{opacity:.88}
+
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);background:rgba(22,39,63,.94);color:#fff;font-size:13px;font-weight:560;padding:12px 22px;border-radius:14px;z-index:90;opacity:0;transition:.3s;backdrop-filter:blur(8px);box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.demo-banner{font-size:12px;color:var(--e-pendingdone);background:var(--e-pendingdone-bg);border-radius:12px;padding:9px 14px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.demo-banner button{border:0;background:rgba(255,255,255,.6);cursor:pointer;font:inherit;font-size:11.5px;font-weight:600;color:var(--ink-soft);padding:6px 12px;border-radius:9px}
+input[type=file]{display:none}
+
+@media (max-width:900px){
+  .app{flex-direction:column}
+  .sidebar{width:100%;height:auto;position:sticky;top:0;z-index:30;flex-direction:row;align-items:center;gap:4px;padding:10px 12px;overflow-x:auto;border-right:0;border-bottom:1px solid rgba(255,255,255,.1)}
+  .sb-brand{display:none}
+  .nav-i{flex-direction:column;gap:3px;padding:8px 12px;font-size:11px;white-space:nowrap;position:relative}
+  .nav-i .ic{font-size:16px}.nav-i .badge{position:absolute;margin:0;transform:translate(14px,-8px)}
+  .sb-new{margin-top:0;white-space:nowrap;padding:10px 14px}
+  .sb-foot{margin-top:0;padding-top:0;margin-left:auto}
+  .content{padding:20px 16px 70px}
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .grid2,.grid3{grid-template-columns:1fr}
+  .card{flex-direction:column}
+  .cright{flex-direction:row;align-items:center;width:100%;justify-content:space-between}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.login-overlay{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;
+  background:linear-gradient(170deg,rgba(31,54,86,.97),rgba(18,32,52,.98));backdrop-filter:blur(8px)}
+.login-card{width:min(400px,90vw);background:var(--glass-strong);border:1px solid rgba(255,255,255,.72);
+  border-radius:var(--radius);box-shadow:var(--shadow-lift);padding:32px 30px;text-align:center}
+.login-card .lc-logo-img{width:190px;max-width:72%;height:auto;display:block;margin:0 auto 14px}
+.login-card h2{font-size:19px;font-weight:700;color:var(--navy);letter-spacing:-.3px}
+.login-card p{font-size:12.5px;color:var(--ink-soft);margin-top:6px}
+.login-card #loginMsg{margin-top:14px;font-size:13px;color:var(--ink-soft);min-height:18px}
+.login-card input{width:100%;margin-top:16px;font:inherit;font-size:15px;text-align:center;letter-spacing:1px;
+  padding:12px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);background:#fff;color:var(--navy);outline:none}
+.login-card input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(44,74,115,.15)}
+.login-card button{width:100%;margin-top:14px;border:0;cursor:pointer;font:inherit;font-size:14px;font-weight:640;color:#fff;
+  padding:12px;border-radius:var(--radius-sm);background:linear-gradient(145deg,#4a72a8,#345788);
+  box-shadow:0 4px 14px rgba(44,74,115,.25);transition:.2s}
+.login-card button:hover{transform:translateY(-1px)}
+</style>
+</head>
+<body>
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-card">
+    <img class="lc-logo-img" src="chinhock-logo.jpg" alt="Chin Hock Agency">
+    <h2>Endorsement Dashboard</h2>
+    <p>CHIN HOCK AGENCY (M) SDN BHD</p>
+    <input id="loginEmail" type="email" placeholder="Team email" onkeydown="if(event.key==='Enter')document.getElementById('loginName').focus()" autocomplete="username">
+    <input id="loginName" type="text" placeholder="Your name (shown on everything you do)" onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()" autocomplete="name">
+    <input id="loginPass" type="password" placeholder="Password" onkeydown="if(event.key==='Enter')submitLogin()" autocomplete="current-password">
+    <button id="loginBtn" onclick="submitLogin()">Log In</button>
+    <div id="loginMsg"></div>
+  </div>
+</div>
+<div class="app">
+  <nav class="sidebar">
+    <div class="sb-brand"><img class="sb-logo-img" src="chinhock-logo.jpg" alt="Chin Hock Agency"><div class="sb-cap">Endorsement Dashboard</div></div>
+    <div class="nav-i on" data-v="dashboard" onclick="switchView('dashboard')"><span class="ic">▦</span> Dashboard <span class="badge" id="attnBadge" style="display:none"></span></div>
+    <div class="nav-i" data-v="settings" onclick="switchView('settings')"><span class="ic">⚙️</span> Settings</div>
+    <button class="sb-new" onclick="openNew()">＋ New Case</button>
+    <div class="sb-foot">
+      <div class="whoami" id="whoAmI" onclick="askName()" title="Click to set your name">Set your name</div>
+      <button onclick="logout()" title="Sign out of this account">🚪 Log Out</button>
+    </div>
+  </nav>
+
+  <main class="content">
+    <div class="c-head">
+      <div class="titles"><h2 id="pgTitle">Dashboard</h2><p id="pgSub"></p></div>
+      <div class="today"><span>Today</span><b id="todayTxt"></b></div>
+    </div>
+    <div id="demoBanner"></div>
+    <div id="view"></div>
+  </main>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeSheet()"></div>
+<aside class="sheet glass" id="sheet"><div id="sheetContent"></div></aside>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+// ============================================================
+// Constants
+// ============================================================
+// TODO: replace with the dedicated Endorsement Dashboard Supabase project
+// (do NOT reuse the Puspakom project — separate data domains).
+const SUPABASE_URL='https://qwpuwkuhafrkppvqlgvl.supabase.co';
+const SUPABASE_ANON_KEY='sb_publishable_RS5U7HnBtfd9vUFhZe8GWw_KLm9pWVE';
+const sb=(window.supabase&&SUPABASE_URL!=='REPLACE_WITH_SUPABASE_URL')?window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY):null;
+
+const ADMIN_EMAILS=['info@chinhockagency.com'];
+let CURRENT_USER_EMAIL='';
+function isAdmin(){return ADMIN_EMAILS.map(e=>e.toLowerCase()).includes((CURRENT_USER_EMAIL||'').toLowerCase())}
+
+const TYPE_LIST=['Policy Cancellation','Ncd Withdrawal','Change Address','Change Owner Name','Change Model','Change BRN No',
+  'Extend to Thai','Extention','Add Agreed Value','Add On E-halling','Add On Windscreen','Waive Excess','NCD Entitlement','Cancel CN',
+  'Retention','NCD Recovery','Reinstant Coverage','Update Passport No','Change Vehicle Class','Change Driver Name'];
+const PIC_LIST=['Moey','Teoh','Ang','Yue Sin','Seng','Shawn'];
+const INSURER_LIST=['Allianz','Etiqa','Liberty','Lonpac','Pacific','Generali','Rhb','MSIG','Zurich','Berjaya Sompo','Tokio Marine','AIG','Tune Protect'];
+const STATUS_CFG={
+  new:{l:'New',ic:'🆕',order:0},
+  followup:{l:'Follow Up',ic:'🔴',order:1},
+  submitted:{l:'Submitted',ic:'📤',order:2},
+  pendingdone:{l:'Pending Done',ic:'⏳',order:3},
+  pendingpay:{l:'Pending Payment',ic:'💳',order:4},
+  pendingletter:{l:'Pending Letter',ic:'📝',order:5},
+  done:{l:'Done',ic:'✅',order:6}
+};
+const STATUS_ORDER=Object.keys(STATUS_CFG);
+
+// ============================================================
+// Date / util helpers
+// ============================================================
+function toISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function parseISO(s){return s?new Date(s+'T00:00:00'):null}
+function fmtLong(s){if(!s)return'—';const d=parseISO(s);const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return String(d.getDate()).padStart(2,'0')+' '+MON[d.getMonth()]+' '+d.getFullYear()}
+function daysUntil(iso){if(!iso)return null;const t=new Date();t.setHours(0,0,0,0);return Math.round((parseISO(iso)-t)/864e5)}
+function nowStamp(){const d=new Date();return d.getDate()+'/'+(d.getMonth()+1)+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')}
+function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
+function money(n){return 'RM'+(+n||0).toFixed(2)}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+
+// ============================================================
+// Shared data layer (Supabase) — single-row JSON blob + rev-based
+// optimistic concurrency, same pattern as the Puspakom Dashboard app.
+// ============================================================
+let CASES=[],TRASH=[],ACTIVITY=[],TEAM_NAMES=[];
+let currentRev=0,dirtyPending=false,savingInFlight=false,pollTimer=null;
+
+function unwrapPayload(payload){
+  if(Array.isArray(payload))return{cases:payload,trash:[],activity:[],teamNames:[]};
+  return{cases:Array.isArray(payload&&payload.cases)?payload.cases:[],
+    trash:Array.isArray(payload&&payload.trash)?payload.trash:[],
+    activity:Array.isArray(payload&&payload.activity)?payload.activity:[],
+    teamNames:Array.isArray(payload&&payload.teamNames)?payload.teamNames:[]};
+}
+async function loadFromServer(){
+  const {data,error}=await sb.from('endorsement_state').select('rev,data').eq('id',1).single();
+  if(error)throw error;
+  const u=unwrapPayload(data.data);
+  CASES=u.cases;TRASH=u.trash;ACTIVITY=u.activity;TEAM_NAMES=u.teamNames;
+  currentRev=data.rev||0;
+}
+function save(){dirtyPending=true;if(save._t)clearTimeout(save._t);save._t=setTimeout(pushNow,600);}
+async function pushNow(){
+  if(savingInFlight||!dirtyPending)return;
+  savingInFlight=true;dirtyPending=false;
+  try{
+    const nextRev=currentRev+1;
+    const {data,error}=await sb.from('endorsement_state')
+      .update({data:{cases:CASES,trash:TRASH,activity:ACTIVITY,teamNames:TEAM_NAMES},rev:nextRev,updated_at:new Date().toISOString(),updated_by:myName()||CURRENT_USER_EMAIL||'Unknown'})
+      .eq('id',1).eq('rev',currentRev).select('rev,data');
+    if(error){if(/JWT|auth|permission|token/i.test(error.message||''))showLogin('Login expired — please log in again');return;}
+    if(!data||!data.length){
+      const cur=await sb.from('endorsement_state').select('rev,data').eq('id',1).single();
+      if(cur.data){const u=unwrapPayload(cur.data.data);CASES=u.cases;TRASH=u.trash;ACTIVITY=u.activity;TEAM_NAMES=u.teamNames;currentRev=cur.data.rev||0;render();toast('⚠️ Data was updated by someone else — latest version loaded, please recheck your recent changes');}
+      return;
+    }
+    currentRev=data[0].rev;
+  }catch(e){/* offline — retried on next save() */}
+  finally{savingInFlight=false;if(dirtyPending)pushNow();}
+}
+function startPolling(){
+  if(pollTimer)clearInterval(pollTimer);
+  pollTimer=setInterval(async()=>{
+    if(dirtyPending||savingInFlight||openId)return;
+    try{
+      const {data,error}=await sb.from('endorsement_state').select('rev,data').eq('id',1).single();
+      if(error||!data)return;
+      if((data.rev||0)!==currentRev){const u=unwrapPayload(data.data);CASES=u.cases;TRASH=u.trash;ACTIVITY=u.activity;TEAM_NAMES=u.teamNames;currentRev=data.rev||0;render();}
+    }catch(e){}
+  },7000);
+}
+
+// ============================================================
+// Auth
+// ============================================================
+function showLogin(msg){const el=document.getElementById('loginOverlay');if(el){el.style.display='flex';const m=document.getElementById('loginMsg');if(m&&msg)m.textContent=msg;
+  const em=document.getElementById('loginEmail');if(em&&!em.value)em.value=localStorage.getItem('ed_email')||'';
+  const nm=document.getElementById('loginName');if(nm&&!nm.value)nm.value=localStorage.getItem(NAME_KEY)||'';
+  const focusEl=(em&&!em.value)?em:document.getElementById('loginPass');if(focusEl)setTimeout(()=>focusEl.focus(),50);}}
+function hideLogin(){const el=document.getElementById('loginOverlay');if(el)el.style.display='none';}
+async function submitLogin(){
+  const email=(((document.getElementById('loginEmail')||{}).value)||'').trim();
+  const name=(((document.getElementById('loginName')||{}).value)||'').trim();
+  const pass=((document.getElementById('loginPass')||{}).value)||'';
+  if(!email||!name||!pass){showLogin('Please enter email, your name, and password');return;}
+  if(!sb){showLogin('Supabase is not configured yet — ask admin to finish setup');return;}
+  const btn=document.getElementById('loginBtn');if(btn){btn.disabled=true;btn.textContent='Logging in…';}
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(btn){btn.disabled=false;btn.textContent='Log In';}
+  if(error){showLogin('Login failed: '+(error.message||'Please check your email and password'));return;}
+  localStorage.setItem('ed_email',email);localStorage.setItem(NAME_KEY,name);renderWhoAmI();hideLogin();boot();
+}
+async function logout(){try{await sb.auth.signOut();}catch(e){}if(pollTimer)clearInterval(pollTimer);showLogin('Logged out');}
+async function boot(){
+  try{
+    if(!sb){showLogin('Supabase is not configured yet — ask admin to finish setup');return;}
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session){showLogin('Please log in');return;}
+    CURRENT_USER_EMAIL=(session.user&&session.user.email)||'';
+    await loadFromServer();
+    if(!isAdmin()){
+      const nm=(myName()||'').trim().toLowerCase();
+      const known=nm&&TEAM_NAMES.some(n=>n.toLowerCase()===nm);
+      if(!known){
+        await sb.auth.signOut();
+        showLogin('That name isn\'t recognized yet — check the spelling, or ask admin to add it under Settings.');
+        return;
+      }
+    }
+    autoFollowUp();
+    render();renderWhoAmI();startPolling();
+  }catch(e){showLogin('Could not load data: '+((e&&e.message)||'Please try again later'));}
+}
+
+// ============================================================
+// Demo seed (only used for local UI verification via console —
+// never auto-loaded into a real Supabase-backed session)
+// ============================================================
+function seed(){
+  const mk=o=>Object.assign({id:uid(),ins:'',pic:'Moey',remark:'',bank:'',followup:'',status:'new',
+    submittedDate:'',enquiryDate:toISO(new Date()),refund:0,gross:0,nett:0,createdAt:Date.now(),driveUrl:'',demo:true},o);
+  return [
+    mk({plate:'KBV668',type:'Ncd Withdrawal',ins:'Etiqa',pic:'Moey',status:'new',remark:'Not submitted yet',refund:2521.63}),
+    mk({plate:'PMG4776',type:'Policy Cancellation',ins:'Etiqa',pic:'Ang',status:'done',submittedDate:toISO(new Date()),refund:195.98}),
+    mk({plate:'PES4835',type:'Ncd Withdrawal',ins:'Liberty',pic:'Moey',status:'pendingletter',remark:'Submitted to calculate premium'}),
+    mk({plate:'TCR9147',type:'Policy Cancellation',ins:'Pacific',pic:'Moey',status:'pendingdone',submittedDate:toISO(new Date(Date.now()-3*864e5))}),
+    mk({plate:'VBP5322',type:'Policy Cancellation',ins:'Generali',pic:'Moey',status:'pendingdone',refund:1311.43}),
+  ];
+}
+
+// ============================================================
+// Auto follow-up rule: a case sitting in "submitted" for more than
+// 2 days without moving forward gets auto-flagged for follow up.
+// ============================================================
+function autoFollowUp(){let ch=false;const today=toISO(new Date());
+  CASES.forEach(c=>{
+    if(c.status!=='submitted'||!c.submittedDate)return;
+    const d=daysUntil(c.submittedDate);
+    if(d!=null&&d<=-2){c.status='followup';ch=true;logActivity('Status changed',c.plate+' · Submitted → Follow Up (auto, no update in 2+ days)');}
+  });
+  if(ch)save();return ch;
+}
+
+// ============================================================
+// Activity log
+// ============================================================
+function logActivity(action,detail){
+  ACTIVITY.push({ts:nowStamp(),who:myName()||CURRENT_USER_EMAIL||'Unknown',action,detail:detail||''});
+  if(ACTIVITY.length>500)ACTIVITY=ACTIVITY.slice(-500);
+}
+
+// ============================================================
+// CRUD
+// ============================================================
+function get(id){return CASES.find(c=>c.id===id)}
+function delRecord(id){
+  if(!isAdmin()){toast('Only admin can delete cases');return}
+  if(!confirm('Delete this case? (can be restored from Trash later)'))return;
+  const c=get(id);if(!c)return;
+  c.deletedAt=nowStamp();c.deletedBy=myName()||CURRENT_USER_EMAIL||'Unknown';
+  CASES=CASES.filter(x=>x.id!==id);
+  TRASH.push(c);
+  save();closeSheet();render();toast('Moved to Trash');
+  logActivity('Deleted case',c.plate);
+}
+function restoreFromTrash(id){
+  if(!isAdmin())return;
+  const idx=TRASH.findIndex(c=>c.id===id);if(idx<0)return;
+  const [c]=TRASH.splice(idx,1);delete c.deletedAt;delete c.deletedBy;
+  CASES.push(c);save();render();toast('Restored '+c.plate);
+  logActivity('Restored case',c.plate);
+}
+function permanentlyDelete(id){
+  if(!isAdmin())return;
+  if(!confirm('Permanently delete this case? This cannot be undone.'))return;
+  const c=TRASH.find(x=>x.id===id);
+  TRASH=TRASH.filter(x=>x.id!==id);save();render();toast('Permanently deleted');
+  logActivity('Permanently deleted case',c?c.plate:id);
+}
+
+// ============================================================
+// Toast / view switching / render dispatch
+// ============================================================
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1900)}
+const TITLES={dashboard:['Dashboard','All endorsement cases'],settings:['Settings','Admin tools — activity log & user management']};
+let CURVIEW='dashboard';
+function switchView(v){CURVIEW=v;document.querySelectorAll('.nav-i').forEach(b=>b.classList.toggle('on',b.dataset.v===v));render()}
+function render(){
+  document.getElementById('todayTxt').textContent=fmtLong(toISO(new Date()));
+  document.getElementById('pgTitle').textContent=TITLES[CURVIEW][0];
+  document.getElementById('pgSub').textContent=TITLES[CURVIEW][1];
+  const attn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
+  const b=document.getElementById('attnBadge');b.style.display=attn?'inline-block':'none';b.textContent=attn;
+  renderDemoBanner();
+  document.getElementById('view').innerHTML=CURVIEW==='settings'?viewSettings():viewDashboard();
+}
+function renderDemoBanner(){const has=CASES.some(c=>c.demo);
+  document.getElementById('demoBanner').innerHTML=has?`<div class="demo-banner">⚠️ Showing demo data so you can see every feature. Clear it anytime and add real cases.<button onclick="clearDemo()">Clear demo data</button></div>`:''}
+function clearDemo(){if(!confirm('Clear all demo data?'))return;CASES=CASES.filter(c=>!c.demo);save();render();toast('Demo data cleared')}
+
+// ============================================================
+// Dashboard view: metrics, filters, status tabs, card list
+// ============================================================
+let fltSearch='',fltType='',fltPic='',fltIns='',activeStatusTab='all',searchTimer=null;
+function setSearch(v){fltSearch=v.trim();clearTimeout(searchTimer);
+  searchTimer=setTimeout(()=>{
+    const wasFocused=document.activeElement&&document.activeElement.id==='searchInput';
+    render();
+    if(wasFocused){const el=document.getElementById('searchInput');if(el){el.focus();el.setSelectionRange(fltSearch.length,fltSearch.length)}}
+  },200);
+}
+function clearSearch(){fltSearch='';render()}
+function setStatusTab(t){activeStatusTab=t;render()}
+function setFltType(v){fltType=v;render()}
+function setFltPic(v){fltPic=v;render()}
+function setFltIns(v){fltIns=v;render()}
+function matchFilters(c){
+  const q=fltSearch.toLowerCase();
+  const qOk=!q||(c.plate||'').toLowerCase().includes(q)||(c.ins||'').toLowerCase().includes(q)||(c.remark||'').toLowerCase().includes(q)||(c.followup||'').toLowerCase().includes(q);
+  const typeOk=!fltType||c.type===fltType;
+  const picOk=!fltPic||c.pic===fltPic;
+  const insOk=!fltIns||c.ins===fltIns;
+  return qOk&&typeOk&&picOk&&insOk;
+}
+function filteredCases(){return CASES.filter(matchFilters)}
+function isDoneThisMonth(c){
+  const basis=c.submittedDate||(c.createdAt?toISO(new Date(c.createdAt)):'');
+  if(!basis)return false;
+  const d=parseISO(basis),now=new Date();
+  return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+}
+function ageLabel(c){
+  const basis=c.enquiryDate||(c.createdAt?toISO(new Date(c.createdAt)):'');
+  if(!basis)return'';
+  const d=daysUntil(basis);
+  if(d==null)return'';
+  return d===0?'today':(-d)+'d ago';
+}
+function statusBadge(status){const s=STATUS_CFG[status]||{l:status,ic:''};return `<span class="status-badge b-${status}">${s.ic} ${s.l}</span>`}
+function caseCard(c){
+  const bits=[];
+  if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
+  if(c.pic)bits.push(`<span class="tag">👤 <b>${esc(c.pic)}</b></span>`);
+  bits.push(`<span class="tag">${c.submittedDate?'Submitted '+fmtLong(c.submittedDate):'Not submitted'}</span>`);
+  if(c.gross||c.nett)bits.push(`<span class="tag">💰 ${c.gross?('Gross '+money(c.gross)):''}${c.gross&&c.nett?' / ':''}${c.nett?('Nett '+money(c.nett)):''}</span>`);
+  if(c.refund)bits.push(`<span class="tag">Refund ${money(c.refund)}</span>`);
+  return `<div class="card glass lift st-${c.status}" onclick="openDetail('${c.id}')">
+    <div class="cmain">
+      <h3>${esc(c.plate)}</h3><span class="type-pill">${esc(c.type)}</span>
+      <div class="cmeta">${bits.join('')}</div>
+      ${c.remark?`<div class="cdesc">${esc(c.remark)}</div>`:''}
+      ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
+    </div>
+    <div class="cright">
+      ${statusBadge(c.status)}
+      <div class="cage">${ageLabel(c)}</div>
+    </div>
+  </div>`;
+}
+function viewDashboard(){
+  const rows=filteredCases();
+  const total=CASES.length;
+  const needAttn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
+  const inProgress=CASES.filter(c=>['submitted','pendingdone','pendingpay','pendingletter'].includes(c.status)).length;
+  const doneThisMonth=CASES.filter(c=>c.status==='done'&&isDoneThisMonth(c)).length;
+  const counts={};STATUS_ORDER.forEach(k=>counts[k]=CASES.filter(c=>c.status===k).length);
+
+  const allTypes=[...new Set(CASES.map(c=>c.type).filter(Boolean))].sort();
+  const allPics=[...new Set(CASES.map(c=>c.pic).filter(Boolean))].sort();
+  const allIns=[...new Set(CASES.map(c=>c.ins).filter(Boolean))].sort();
+
+  const metrics=`<div class="metrics">
+    <div class="metric glass"><div class="mlab">Total Cases</div><div class="mval">${total}</div></div>
+    <div class="metric glass m-attn"><div class="mlab">Need Attention</div><div class="mval">${needAttn}</div><div class="msub">New + Follow Up</div></div>
+    <div class="metric glass m-prog"><div class="mlab">In Progress</div><div class="mval">${inProgress}</div><div class="msub">Submitted → Pending stages</div></div>
+    <div class="metric glass m-done"><div class="mlab">Completed</div><div class="mval">${doneThisMonth}</div><div class="msub">Done this month</div></div>
+  </div>`;
+
+  const filters=`<div class="filters">
+    <div class="co-filter"><input id="searchInput" type="text" placeholder="Search plate / insurance / remark…" value="${esc(fltSearch)}" oninput="setSearch(this.value)">${fltSearch?`<button class="clr" onclick="document.getElementById('searchInput').value='';clearSearch()">✕</button>`:''}</div>
+    <select onchange="setFltType(this.value)"><option value="">All Types</option>${allTypes.map(t=>`<option value="${esc(t)}" ${t===fltType?'selected':''}>${esc(t)}</option>`).join('')}</select>
+    <select onchange="setFltPic(this.value)"><option value="">All PIC</option>${allPics.map(p=>`<option value="${esc(p)}" ${p===fltPic?'selected':''}>${esc(p)}</option>`).join('')}</select>
+    <select onchange="setFltIns(this.value)"><option value="">All Insurance</option>${allIns.map(i=>`<option value="${esc(i)}" ${i===fltIns?'selected':''}>${esc(i)}</option>`).join('')}</select>
+  </div>`;
+
+  const tabs=`<div class="seg stabs">
+    <button class="${activeStatusTab==='all'?'on':''}" onclick="setStatusTab('all')">All (${CASES.length})</button>
+    ${STATUS_ORDER.map(k=>`<button class="${activeStatusTab===k?'on':''}" onclick="setStatusTab('${k}')">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} (${counts[k]})</button>`).join('')}
+  </div>`;
+
+  let body;
+  if(!rows.length){
+    body=`<div class="empty glass"><div class="ic">📭</div><div style="font-weight:640;color:var(--navy)">No cases match</div><div style="font-size:13px;margin-top:4px">Try clearing filters or add a new case.</div></div>`;
+  }else if(activeStatusTab==='all'){
+    body=STATUS_ORDER.map(k=>{
+      const group=rows.filter(c=>c.status===k);
+      if(!group.length)return'';
+      return `<div class="sect-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${group.length}</span></div><div class="list">${group.map(caseCard).join('')}</div>`;
+    }).join('');
+  }else{
+    body=`<div class="list">${rows.filter(c=>c.status===activeStatusTab).map(caseCard).join('')}</div>`;
+  }
+
+  return metrics+filters+tabs+body;
+}
+
+// ============================================================
+// Detail / edit sheet
+// ============================================================
+let openId=null;
+function field(label,id,val,type,opts){val=val==null?'':val;
+  if(type==='select')return `<div class="fld"><label>${label}</label><select id="${id}">${opts.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
+  if(type==='textarea')return `<div class="fld"><label>${label}</label><textarea id="${id}">${esc(val)}</textarea></div>`;
+  if(type==='date')return `<div class="fld"><label>${label}</label><input id="${id}" type="date" value="${val}"></div>`;
+  return `<div class="fld"><label>${label}</label><input id="${id}" type="${type||'text'}" value="${esc(val)}"></div>`}
+function linkField(label,id,val){val=val||'';const open=/^https?:\/\//i.test(val)?`<a class="openlink" href="${val}" target="_blank" rel="noopener">Open ↗</a>`:'';
+  return `<div class="fld"><label>${label}${open}</label><input id="${id}" type="text" value="${esc(val)}" placeholder="paste link…"></div>`}
+function showSheet(){document.getElementById('scrim').classList.add('show');document.getElementById('sheet').classList.add('show')}
+function closeSheet(){document.getElementById('scrim').classList.remove('show');document.getElementById('sheet').classList.remove('show');openId=null}
+function openDetail(id){openId=id;renderSheet();showSheet()}
+function renderSheet(){
+  const c=get(openId);if(!c)return;
+  document.getElementById('sheetContent').innerHTML=`
+    <div class="sheet-h"><div><h2>${esc(c.plate)}</h2><div class="sub">${esc(c.type)} · ${esc(c.ins||'—')}</div></div>
+      <div class="sheet-h-actions"><button class="hsave" onclick="saveSheet()">💾 Save</button><button class="x" onclick="closeSheet()">✕</button></div></div>
+    <div class="sheet-b">
+      <div class="sect"><label class="h">Case Info</label>
+        ${field('Vehicle Number','f_plate',c.plate)}
+        ${field('Endorsement Type','f_type',c.type,'select',TYPE_LIST)}
+        <div class="grid2">${field('Insurance Company','f_ins',c.ins)}${field('PIC','f_pic',c.pic,'select',PIC_LIST)}</div>
+        ${field('Enquiry Date','f_enquiryDate',c.enquiryDate,'date')}
+        ${field('Remark','f_remark',c.remark,'textarea')}
+      </div>
+      <div class="sect"><label class="h">Status &amp; Tracking</label>
+        ${field('Status','f_status',STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'','select',STATUS_ORDER.map(k=>STATUS_CFG[k].l))}
+        ${field('Submitted Date','f_submittedDate',c.submittedDate,'date')}
+        ${field('Follow Up Note','f_followup',c.followup)}
+      </div>
+      <div class="sect"><label class="h">Bank Details (for refunds)</label>
+        ${field('Bank / Account','f_bank',c.bank)}
+      </div>
+      <div class="sect"><label class="h">Amounts</label>
+        <div class="grid3">${field('Refund (RM)','f_refund',c.refund,'number')}${field('Gross (RM)','f_gross',c.gross,'number')}${field('Nett (RM)','f_nett',c.nett,'number')}</div>
+      </div>
+      <div class="sect">${linkField('Drive Link','f_driveUrl',c.driveUrl)}</div>
+      ${isAdmin()?`<button class="bigbtn danger" onclick="delRecord('${c.id}')">🗑️ Delete this case</button>`:''}
+    </div>`;
+}
+function readSheet(){
+  const c=get(openId);if(!c)return null;
+  const g=id=>{const e=document.getElementById(id);return e?e.value:undefined};
+  const LABEL_TO_KEY=Object.fromEntries(STATUS_ORDER.map(k=>[STATUS_CFG[k].l,k]));
+  c.plate=(g('f_plate')||c.plate).trim().toUpperCase();
+  c.type=g('f_type')||c.type;
+  c.ins=(g('f_ins')||'').trim();
+  c.pic=g('f_pic')||c.pic;
+  c.enquiryDate=g('f_enquiryDate')||'';
+  c.remark=g('f_remark')||'';
+  const newStatus=LABEL_TO_KEY[g('f_status')]||c.status;
+  if(newStatus!==c.status)logActivity('Status changed',`${c.plate} · ${STATUS_CFG[c.status].l} → ${STATUS_CFG[newStatus].l}`);
+  c.status=newStatus;
+  c.submittedDate=g('f_submittedDate')||'';
+  c.followup=g('f_followup')||'';
+  c.bank=g('f_bank')||'';
+  c.refund=+g('f_refund')||0;
+  c.gross=+g('f_gross')||0;
+  c.nett=+g('f_nett')||0;
+  c.driveUrl=g('f_driveUrl')||'';
+  return c;
+}
+function saveSheet(){const c=readSheet();if(!c)return;save();renderSheet();render();toast('Saved');logActivity('Edited case',c.plate)}
+
+// ============================================================
+// New Case form
+// ============================================================
+function openNew(){renderNewSheet();showSheet()}
+function renderNewSheet(){
+  document.getElementById('sheetContent').innerHTML=`
+    <div class="sheet-h"><div><h2>New Case</h2><div class="sub">Add a new endorsement enquiry</div></div><button class="x" onclick="closeSheet()">✕</button></div>
+    <div class="sheet-b">
+      <div class="sect"><label class="h">Case details</label>
+        ${field('Vehicle Number','n_plate','')}
+        ${field('Endorsement Type','n_type','Policy Cancellation','select',TYPE_LIST)}
+        <div class="grid2">${field('Insurance Company','n_ins','','text')}${field('PIC','n_pic',PIC_LIST[0],'select',PIC_LIST)}</div>
+        ${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}
+        ${field('Remark','n_remark','','textarea')}
+      </div>
+      <div class="sect" id="bankSection" style="display:none"><label class="h">Bank Details (for cancellation refund)</label>
+        <div class="grid2">${field('Bank Name','n_bankName','')}${field('Account No','n_acctNo','')}</div>
+        ${field('Account Holder Name','n_acctHolder','')}
+      </div>
+      <button class="bigbtn" onclick="addNew()">＋ Add case</button>
+    </div>`;
+  const typeSel=document.getElementById('n_type');
+  const toggleBank=()=>{document.getElementById('bankSection').style.display=(typeSel.value==='Policy Cancellation')?'block':'none';};
+  typeSel.addEventListener('change',toggleBank);toggleBank();
+}
+function addNew(){
+  const g=id=>{const e=document.getElementById(id);return e?e.value:''};
+  if(!g('n_plate').trim()){toast('Please enter a vehicle number');return}
+  const bankName=g('n_bankName').trim(),acctNo=g('n_acctNo').trim(),acctHolder=g('n_acctHolder').trim();
+  const bank=bankName||acctNo||acctHolder?`${bankName} - ${acctNo} (${acctHolder})`:'';
+  const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),type:g('n_type')||TYPE_LIST[0],ins:g('n_ins').trim(),
+    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bank,followup:'',status:'new',submittedDate:'',
+    enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,gross:0,nett:0,createdAt:Date.now(),driveUrl:'',demo:false};
+  CASES.push(c);save();closeSheet();switchView('dashboard');toast('Added '+c.plate);
+  logActivity('Added new case',c.plate);
+}
+
+// ============================================================
+// Settings: Tools / Activity Log / Manage Users / Trash
+// ============================================================
+function emptyHTML(ic,t,s){return `<div class="empty glass"><div class="ic">${ic}</div><div style="font-weight:640;color:var(--navy)">${t}</div><div style="font-size:13px;margin-top:4px">${s}</div></div>`}
+let settingsTab='tools';
+function setSettingsTab(t){settingsTab=t;render()}
+function viewSettings(){
+  if(!isAdmin()&&settingsTab!=='tools')settingsTab='tools';
+  const tabs=`<div class="seg" style="margin-bottom:14px">
+    <button class="${settingsTab==='tools'?'on':''}" onclick="setSettingsTab('tools')">🛠️ Tools</button>
+    ${isAdmin()?`<button class="${settingsTab==='activity'?'on':''}" onclick="setSettingsTab('activity')">📜 Activity Log</button>
+    <button class="${settingsTab==='users'?'on':''}" onclick="setSettingsTab('users')">👥 Manage Users</button>
+    <button class="${settingsTab==='trash'?'on':''}" onclick="setSettingsTab('trash')">🗑️ Trash</button>`:''}
+  </div>`;
+  const page=settingsTab==='users'?viewManageUsers():settingsTab==='activity'?viewActivityLog():settingsTab==='trash'?viewTrash():viewSettingsTools();
+  return tabs+page;
+}
+function viewSettingsTools(){
+  return `<div class="sect" style="max-width:480px">
+    <label class="h">Backup &amp; restore</label>
+    <div class="hint" style="margin:6px 0 12px">Export a copy of all cases, or bring one back in.</div>
+    <div class="grid2">
+      <button class="mini" onclick="exportData()">⬇︎ Backup</button>
+      ${isAdmin()?`<button class="mini" onclick="document.getElementById('imp').click()">⬆︎ Restore</button>
+      <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">`:''}
+    </div>
+  </div>`;
+}
+function viewActivityLog(){
+  if(!ACTIVITY.length)return emptyHTML('📜','No activity yet','Adding, editing, deleting, and status changes will show up here.');
+  const rows=[...ACTIVITY].reverse();
+  return `<div class="list">${rows.map(a=>`<div class="card glass" style="cursor:default;border-left-color:var(--line)">
+    <div class="cmain"><h3 style="font-size:14px">${esc(a.action)}</h3><div class="cdesc" style="border:0;padding:0;margin-top:4px">${esc(a.detail||'')}</div>
+      <div class="cmeta"><span class="tag">${a.ts}</span><span class="tag">👤 ${esc(a.who)}</span></div></div></div>`).join('')}</div>`;
+}
+function viewManageUsers(){
+  return `<div class="hint" style="background:rgba(255,255,255,.5);border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:14px">👥 Adding or removing team logins is done directly in Supabase — this keeps passwords out of the app's own code entirely.</div>
+    <div class="sect" style="max-width:520px">
+      <label class="h">Current admins</label>
+      <div class="hint" style="margin:6px 0 14px">${ADMIN_EMAILS.join(', ')}</div>
+      <label class="h">Add a new team login</label>
+      <div class="hint" style="margin:6px 0 14px">Go to your Supabase project → <b>Authentication → Users → Add user</b>, set their email + a password, and share it with them directly.</div>
+      <label class="h" style="margin-top:18px;display:block">Approved names</label>
+      <div class="hint" style="margin:6px 0 10px">Non-admin logins must type one of these names exactly (not case-sensitive) to get in — this is what stops a shared login being used under someone else's name.</div>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input id="newTeamName" type="text" placeholder="Add a name…" style="flex:1;font:inherit;font-size:13.5px;border:1px solid var(--line);border-radius:10px;padding:9px" onkeydown="if(event.key==='Enter')addTeamName()">
+        <button class="mini go" onclick="addTeamName()">Add</button>
+      </div>
+      <div>${TEAM_NAMES.length?TEAM_NAMES.map(n=>`<span style="display:inline-flex;align-items:center;gap:6px;margin:0 6px 6px 0;padding:6px 10px;background:var(--glass-strong);border-radius:20px;font-size:12.5px">${esc(n)}<button onclick="removeTeamName('${n.replace(/'/g,"\\'")}')" style="border:0;background:transparent;cursor:pointer;color:var(--e-followup);font-weight:700">✕</button></span>`).join(''):'<span class="hint">No names added yet — no one but admin can log in until you add some.</span>'}</div>
+    </div>`;
+}
+function addTeamName(){
+  const inp=document.getElementById('newTeamName');if(!inp)return;
+  const v=inp.value.trim();if(!v)return;
+  if(TEAM_NAMES.some(n=>n.toLowerCase()===v.toLowerCase())){toast('Already in the list');return}
+  TEAM_NAMES.push(v);save();render();toast('Added '+v);
+}
+function removeTeamName(name){
+  if(!confirm('Remove "'+name+'" from the approved list? They won\'t be able to log in until re-added.'))return;
+  TEAM_NAMES=TEAM_NAMES.filter(n=>n!==name);save();render();toast('Removed');
+}
+function viewTrash(){
+  if(!isAdmin())return emptyHTML('🔒','Admins only','Only the admin account can view and restore deleted cases.');
+  if(!TRASH.length)return emptyHTML('🗑️','Trash is empty','Deleted cases appear here and can be restored.');
+  const rows=[...TRASH].sort((a,b)=>(b.deletedAt||'').localeCompare(a.deletedAt||''));
+  return `<div class="hint" style="background:rgba(255,255,255,.5);border:1px solid var(--line);border-radius:12px;padding:11px 14px;margin-bottom:14px">🗑️ Deleted cases — restore if this was a mistake, or remove permanently.</div>
+    <div class="list">${rows.map(c=>`<div class="card glass" style="cursor:default;border-left-color:var(--line)"><div class="cmain"><h3>${esc(c.plate)}</h3><span class="type-pill">${esc(c.type)}</span>
+      <div class="cmeta"><span class="tag">Deleted ${c.deletedAt||''}${c.deletedBy?' by '+esc(c.deletedBy):''}</span></div>
+      <div class="cmeta" style="margin-top:9px">
+        <button class="mini go" onclick="restoreFromTrash('${c.id}')">↺ Restore</button>
+        <button class="mini undo" style="color:var(--e-followup)" onclick="permanentlyDelete('${c.id}')">✕ Delete permanently</button>
+      </div></div></div>`).join('')}</div>`;
+}
+
+// ============================================================
+// Backup export / import (local JSON file, not the shared sync path)
+// ============================================================
+const NAME_KEY='ed_my_name';
+function myName(){return localStorage.getItem(NAME_KEY)||''}
+function askName(){const cur=myName();const n=prompt('Your name (shown on everything you do):',cur);
+  if(n&&n.trim()){localStorage.setItem(NAME_KEY,n.trim());renderWhoAmI()}return myName()}
+function renderWhoAmI(){const el=document.getElementById('whoAmI');if(!el)return;
+  el.textContent=myName()?('You: '+myName()):'Set your name';}
+function exportData(){
+  if(!myName())askName();
+  const payload={cases:CASES,trash:TRASH,activity:ACTIVITY,teamNames:TEAM_NAMES,exportedAt:new Date().toISOString(),exportedBy:myName()};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='endorsement_backup_'+toISO(new Date())+'.json';a.click();
+  toast('Backup exported'+(myName()?' as '+myName():''));
+}
+function importData(e){
+  if(!isAdmin()){toast('Only admin can restore from a backup file');e.target.value='';return}
+  const f=e.target.files[0];if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{
+    const d=JSON.parse(rd.result);
+    if(!d||!Array.isArray(d.cases)){toast('That file does not look like a valid backup');return}
+    if(!confirm('Replace all current data with this backup ('+d.cases.length+' cases)? This cannot be undone.'))return;
+    CASES=d.cases;TRASH=Array.isArray(d.trash)?d.trash:[];ACTIVITY=Array.isArray(d.activity)?d.activity:[];TEAM_NAMES=Array.isArray(d.teamNames)?d.teamNames:[];
+    save();render();toast('Backup restored');
+  }catch(err){toast('Could not read that file')}};
+  rd.readAsText(f);e.target.value='';
+}
+
+// ============================================================
+// Boot
+// ============================================================
+boot();
+</script>
+</body>
+</html>
