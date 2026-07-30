@@ -607,7 +607,7 @@ function insField(id,val){
       ${INSURER_LIST.map(o=>`<option ${o===selected?'selected':''}>${esc(o)}</option>`).join('')}
       <option ${showOther?'selected':''}>${INSURER_OTHER}</option>
     </select></div>
-    <div class="fld" id="${otherId}" style="display:${showOther?'block':'none'}"><label>Please specify insurance company</label><input id="${otherId}Input" type="text" value="${esc(showOther?val:'')}"></div>`;
+    <div class="fld" id="${otherId}" style="display:${showOther?'block':'none'};grid-column:1/-1"><label>Please specify insurance company</label><input id="${otherId}Input" type="text" value="${esc(showOther?val:'')}"></div>`;
 }
 function readInsValue(id){
   const sel=document.getElementById(id);if(!sel)return'';
@@ -624,11 +624,8 @@ function renderSheet(){
       <div class="sheet-h-actions"><button class="hsave" onclick="saveSheet()">💾 Save</button><button class="x" onclick="closeSheet()">✕</button></div></div>
     <div class="sheet-b">
       <div class="sect"><label class="h">Case Info</label>
-        ${field('Vehicle Number','f_plate',c.plate)}
-        ${typeField('f_type',c.type)}
-        ${insField('f_ins',c.ins)}
-        ${field('PIC','f_pic',c.pic,'select',PIC_LIST)}
-        ${field('Enquiry Date','f_enquiryDate',c.enquiryDate,'date')}
+        <div class="grid3">${field('Vehicle Number','f_plate',c.plate)}${typeField('f_type',c.type)}${insField('f_ins',c.ins)}</div>
+        <div class="grid2">${field('PIC','f_pic',c.pic,'select',PIC_LIST)}${field('Enquiry Date','f_enquiryDate',c.enquiryDate,'date')}</div>
         ${field('Remark','f_remark',c.remark,'textarea')}
       </div>
       <div class="sect"><label class="h">Status &amp; Tracking</label>
@@ -679,11 +676,8 @@ function renderNewSheet(){
     <div class="sheet-h"><div><h2>New Case</h2><div class="sub">Add a new endorsement enquiry</div></div><button class="x" onclick="closeSheet()">✕</button></div>
     <div class="sheet-b">
       <div class="sect"><label class="h">Case details</label>
-        ${field('Vehicle Number','n_plate','')}
-        ${typeField('n_type','Policy Cancellation')}
-        ${insField('n_ins','')}
-        ${field('PIC','n_pic',PIC_LIST[0],'select',PIC_LIST)}
-        ${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}
+        <div class="grid3">${field('Vehicle Number','n_plate','')}${typeField('n_type','Policy Cancellation')}${insField('n_ins','')}</div>
+        <div class="grid2">${field('PIC','n_pic',PIC_LIST[0],'select',PIC_LIST)}${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}</div>
         ${field('Remark','n_remark','','textarea')}
         ${linkField('Drive File Link','n_driveUrl','')}
       </div>
