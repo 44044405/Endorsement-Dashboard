@@ -103,7 +103,7 @@ body{
 .sect-head .cnt{background:rgba(40,70,110,.08);border-radius:9px;padding:1px 8px;font-size:11px}
 .list{display:flex;flex-direction:column;gap:10px}
 .tbl{border-radius:var(--radius);overflow:hidden;background:rgba(255,255,255,.5);border:1px solid var(--line);margin-bottom:10px}
-.trow{display:grid;grid-template-columns:.9fr 1.4fr 1fr 1.2fr 1.3fr 1.1fr;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:.15s}
+.trow{display:grid;grid-template-columns:.85fr 1.3fr .9fr 1.1fr 1.2fr .8fr .8fr .9fr;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:.15s}
 .trow:last-child{border-bottom:0}
 .trow:not(.head):hover{background:rgba(255,255,255,.75)}
 .trow.head{cursor:default;background:rgba(22,39,63,.04);font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);padding:10px 18px}
@@ -354,6 +354,9 @@ const TYPE_LIST_RAW=['Policy Cancellation','Ncd Withdrawal','Change Address','Ch
 const TYPE_LIST=[...TYPE_LIST_RAW].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
 // These two are done most often — shown bold in the Endorsement Type dropdown.
 const TYPE_COMMON=new Set(['Policy Cancellation','Ncd Withdrawal']);
+// These two involve waiting for a refund from the insurer — cases of these types need a Refund Date;
+// if a case is marked Done without one, it's auto-bounced back to Follow Up (see saveSheet()).
+const REFUND_TYPES=new Set(['Policy Cancellation','NCD Entitlement']);
 // Endorsement types added on the fly via "+ New Type" (New Case form only) — synced via Supabase (CUSTOM_TYPES),
 // merged into every Endorsement Type dropdown app-wide so the team never has to maintain a separate list.
 const NEW_TYPE_OPT='+ New Type';
@@ -496,7 +499,7 @@ async function boot(){
 // ============================================================
 function seed(){
   const mk=o=>Object.assign({id:uid(),ins:'',pic:'Moey',remark:'',bank:'',followup:'',status:'new',
-    submittedDate:'',enquiryDate:toISO(new Date()),refund:0,gross:0,nett:0,createdAt:Date.now(),driveUrl:'',demo:true},o);
+    submittedDate:'',enquiryDate:toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:'',demo:true},o);
   return [
     mk({plate:'KBV668',type:'Ncd Withdrawal',ins:'Etiqa',pic:'Moey',status:'new',remark:'Not submitted yet',refund:2521.63}),
     mk({plate:'PMG4776',type:'Policy Cancellation',ins:'Etiqa',pic:'Ang',status:'done',submittedDate:toISO(new Date()),refund:195.98}),
@@ -724,7 +727,9 @@ function setDSort(key){if(dSortKey===key){dSortDir=-dSortDir}else{dSortKey=key;d
 function dSortIcon(key){if(dSortKey!==key)return '<span class="sort-ic">▽</span>';return dSortDir===1?'<span class="sort-ic on">▲</span>':'<span class="sort-ic on">▼</span>'}
 function dSortVal(c,key){
   if(key==='status')return STATUS_CFG[c.status]?STATUS_CFG[c.status].order:0;
-  if(key==='amount')return (+c.gross||0)+(+c.nett||0)+(+c.refund||0);
+  if(key==='amount')return (+c.gross||0)+(+c.nett||0);
+  if(key==='refund')return +c.refund||0;
+  if(key==='refundDate')return (c.refundDate||'')+'';
   return (c[key]||'')+'';
 }
 function applyDSort(rows){
@@ -778,6 +783,8 @@ function caseCard(c){
   bits.push(`<span class="tag">${c.submittedDate?'Submitted '+fmtLong(c.submittedDate):'Not submitted'}</span>`);
   if(c.gross||c.nett)bits.push(`<span class="tag">💰 ${c.gross?('Gross '+money(c.gross)):''}${c.gross&&c.nett?' / ':''}${c.nett?('Nett '+money(c.nett)):''}</span>`);
   if(c.refund)bits.push(`<span class="tag">Refund ${money(c.refund)}</span>`);
+  if(c.refundDate)bits.push(`<span class="tag">📅 Refund Date ${fmtLong(c.refundDate)}</span>`);
+  else if(REFUND_TYPES.has(c.type))bits.push(`<span class="tag" style="color:var(--e-followup);font-weight:600">⏳ Refund Pending</span>`);
   if(c.driveUrl)bits.push(`<a class="tag" href="${c.driveUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Drive Link</a>`);
   return `<div class="card glass lift st-${c.status}" onclick="openDetail('${c.id}')">
     <div class="cmain">
@@ -796,8 +803,14 @@ function amountText(c){
   const amt=[];
   if(c.gross)amt.push('Gross '+money(c.gross));
   if(c.nett)amt.push('Nett '+money(c.nett));
-  if(c.refund)amt.push('Refund '+money(c.refund));
   return amt.length?amt.join(' / '):'—';
+}
+// A refund-type case (Policy Cancellation / NCD Entitlement) that's Done with no Refund Date
+// shouldn't normally happen — saveSheet() bounces it back to Follow Up — but shows as Pending here too as a backstop.
+function refundDateText(c){
+  if(c.refundDate)return fmtLong(c.refundDate);
+  if(REFUND_TYPES.has(c.type))return '<span style="color:var(--e-followup);font-weight:600">Pending</span>';
+  return '—';
 }
 function headRowHtml(){
   return `<div class="trow head">
@@ -807,6 +820,8 @@ function headRowHtml(){
     <div class="sortable" onclick="setDSort('type')">Endorsement Type ${dSortIcon('type')}</div>
     <div class="sortable" onclick="setDSort('status')">Status &amp; Date ${dSortIcon('status')}</div>
     <div class="sortable" onclick="setDSort('amount')">Amount ${dSortIcon('amount')}</div>
+    <div class="sortable" onclick="setDSort('refund')">Refund Amt ${dSortIcon('refund')}</div>
+    <div class="sortable" onclick="setDSort('refundDate')">Refund Date ${dSortIcon('refundDate')}</div>
   </div>`;
 }
 function caseRow(c){
@@ -818,6 +833,8 @@ function caseRow(c){
     <div class="tcell"><b>${esc(c.type)}</b></div>
     <div class="tcell">${statusBadge(c.status)}<div class="tdate">${dateLine}</div></div>
     <div class="tcell"><b>${amountText(c)}</b></div>
+    <div class="tcell">${c.refund?money(c.refund):'—'}</div>
+    <div class="tcell">${refundDateText(c)}</div>
   </div>`;
 }
 function tableBlock(list){
@@ -939,6 +956,7 @@ function renderSheet(){
       </div>
       <div class="sect"><label class="h">Amounts</label>
         <div class="grid3">${field('Gross (RM)','f_gross',c.gross,'number')}${field('Nett (RM)','f_nett',c.nett,'number')}${field('Refund (RM)','f_refund',c.refund,'number')}</div>
+        <div class="fld" id="f_refundDateWrap" style="display:${REFUND_TYPES.has(c.type)?'block':'none'}"><label>Refund Date</label><input id="f_refundDate" type="date" value="${c.refundDate||''}"></div>
       </div>
       <div class="sect"><label class="h">Status &amp; Tracking</label>
         ${field('Status','f_status',STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'','select',STATUS_ORDER.map(k=>STATUS_CFG[k].l))}
@@ -951,6 +969,11 @@ function renderSheet(){
       <div class="sect">${linkField('Drive Link','f_driveUrl',c.driveUrl)}${!c.driveUrl?`<button class="mini" onclick="autoCreateDriveFolder(get('${c.id}'))">📁 Create Drive Folder</button>`:''}</div>
       ${isAdmin()?`<button class="bigbtn danger" onclick="delRecord('${c.id}')">🗑️ Delete this case</button>`:''}
     </div>`;
+  const typeSel=document.getElementById('f_type');
+  if(typeSel)typeSel.addEventListener('change',()=>{
+    const wrap=document.getElementById('f_refundDateWrap');
+    if(wrap)wrap.style.display=REFUND_TYPES.has(typeSel.value)?'block':'none';
+  });
 }
 function readSheet(){
   const c=get(openId);if(!c)return null;
@@ -971,10 +994,22 @@ function readSheet(){
   c.refund=+g('f_refund')||0;
   c.gross=+g('f_gross')||0;
   c.nett=+g('f_nett')||0;
+  c.refundDate=g('f_refundDate')||'';
   c.driveUrl=g('f_driveUrl')||'';
   return c;
 }
-function saveSheet(){const c=readSheet();if(!c)return;save();renderSheet();render();toast('Saved');logActivity('Edited case',c.plate)}
+function saveSheet(){
+  const c=readSheet();if(!c)return;
+  if(c.status==='done'&&REFUND_TYPES.has(c.type)&&!c.refundDate){
+    c.status='followup';
+    logActivity('Status changed',`${c.plate} · Done → Follow Up (auto, Refund Date not filled in)`);
+    save();renderSheet();render();
+    toast('⚠️ Refund Date is required to mark this type as Done — moved to Follow Up instead');
+    logActivity('Edited case',c.plate);
+    return;
+  }
+  save();renderSheet();render();toast('Saved');logActivity('Edited case',c.plate);
+}
 
 // ============================================================
 // New Case form
@@ -1009,7 +1044,7 @@ function addNew(){
   const bank=bankName||acctNo||acctHolder?`${bankName} - ${acctNo} (${acctHolder})`:'';
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
     pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bank,followup:'',status:'new',submittedDate:'',
-    enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
+    enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
   CASES.push(c);save();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
   if(!c.driveUrl)autoCreateDriveFolder(c,{silent:true});
