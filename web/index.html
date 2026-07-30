@@ -172,6 +172,10 @@ body{
 .sect>label.h{display:block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--navy);margin:0 0 13px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .fld{margin-bottom:11px}
 .fld label{display:block;font-size:12px;color:var(--ink-soft);margin:0 2px 5px;font-weight:550}
+.fld-label-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 2px 5px}
+.fld-label-row label{margin:0}
+.copy-pic{border:0;background:rgba(61,90,130,.12);color:var(--navy);cursor:pointer;font:inherit;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:8px;transition:.15s;white-space:nowrap}
+.copy-pic:hover{background:rgba(61,90,130,.22)}
 .fld input,.fld select,.fld textarea{width:100%;font:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:12px;padding:11px 13px;transition:.2s;outline:none}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--navy-soft);background:#fff;box-shadow:0 0 0 3.5px rgba(44,74,115,.16)}
 .fld textarea{resize:vertical;min-height:62px}
@@ -379,6 +383,40 @@ const PIC_LIST=['Moey','Teoh','Ang','Yue Sin','Seng','Shawn'];
 const INSURER_LIST=['Liberty','Kurnia','Pacific','Allianz','Etiqa','MSIG','Zurich','Lonpac','Rhb','Generali']
   .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
 const INSURER_OTHER='Other';
+// Policy Cancellation refund Email PIC — per-insurer To/CC contacts, confirmed with Teoh 2026-07-30.
+// Every insurer also gets this fixed CC on top of its own list.
+const EMAIL_PIC_FIXED_CC='chinhockagency@hotmail.com';
+const EMAIL_PIC={
+  'Liberty':{to:['libmotorefund@libertyinsurance.com.my'],cc:['tan-yong-yen@libertyinsurance.com.my','junie.goh@libertyinsurance.com.my']},
+  'Allianz':{to:['khiron.bee@allianz.com.my','khaldun.ahmad@allianz.com.my'],cc:['zulkifli.shoib@allianz.com.my']},
+  'Zurich':{to:['linee.yeoh@zurich.com.my','chaihsia.ooi@zurich.com.my'],cc:['khaiching.tan@zurich.com.my','jocelyn.too@zurich.com.my']},
+  'Pacific':{to:['nirmala.govinda@pacificinsurance.com.my','jullee@pacificinsurance.com.my'],cc:['desmondsim@pacificinsurance.com.my']},
+  'Lonpac':{to:['ghyeoh@lonpac.com','hhleeh@lonpac.com','pakialetchumy@lonpac.com'],cc:['stephennieooi@lonpac.com']},
+  'Etiqa':{to:['aliahanis.mohamadkiswadi@etiqa.com.my','rozawati.r@etiqa.com.my'],cc:['tzichi.soon@etiqa.com.my']},
+  'Generali':{to:['ezan.rahim@generali.com.my'],cc:['brenda.fang@generali.com.my']},
+  'Rhb':{to:['priscillia.tan.zhiwei@rhbgroup.com'],cc:['khow.weai.choon@rhbgroup.com']},
+  'MSIG':{to:['aunnee_choong@my.msig-asia.com'],cc:[]},
+};
+EMAIL_PIC['Kurnia']=EMAIL_PIC['Liberty'];
+function toggleEmailPicBtn(insId){
+  const typeId=insId==='n_ins'?'n_type':insId==='f_ins'?'f_type':null;
+  const typeSel=typeId&&document.getElementById(typeId);
+  const insSel=document.getElementById(insId);
+  const btn=document.getElementById(insId+'CopyBtn');
+  if(!btn||!insSel)return;
+  const isPolicyCancellation=typeSel&&typeSel.value==='Policy Cancellation';
+  btn.style.display=(isPolicyCancellation&&EMAIL_PIC[insSel.value])?'inline-flex':'none';
+}
+function copyEmailPic(insId){
+  const insSel=document.getElementById(insId);if(!insSel)return;
+  const m=EMAIL_PIC[insSel.value];
+  if(!m){toast('No Email PIC on file for '+insSel.value);return;}
+  const text=`To: ${m.to.join(', ')}\nCC: ${[...m.cc,EMAIL_PIC_FIXED_CC].join(', ')}`;
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return;}
+  navigator.clipboard.writeText(text)
+    .then(()=>toast('📋 Copied Email PIC for '+insSel.value))
+    .catch(()=>toast('Could not copy to clipboard'));
+}
 const STATUS_CFG={
   new:{l:'New',ic:'🆕',order:0},
   followup:{l:'Follow Up',ic:'🔴',order:1},
@@ -931,13 +969,16 @@ function readTypeValue(id){
   return sel.value;
 }
 // Insurance Company dropdown — A-Z sorted fixed list + "Other" reveals a free-text input.
+// For Policy Cancellation cases, a 📋 button appears (toggleEmailPicBtn) to copy that insurer's refund Email PIC.
 function insField(id,val){
   val=val||'';
   const match=INSURER_LIST.find(i=>i.toLowerCase()===val.toLowerCase());
   const selected=match||(val?INSURER_OTHER:INSURER_LIST[0]);
   const showOther=selected===INSURER_OTHER;
   const otherId=id+'Other';
-  return `<div class="fld"><label>Insurance Company</label><select id="${id}" onchange="document.getElementById('${otherId}').style.display=this.value==='${INSURER_OTHER}'?'block':'none'">
+  return `<div class="fld">
+    <div class="fld-label-row"><label>Insurance Company</label><button type="button" class="copy-pic" id="${id}CopyBtn" style="display:none" onclick="copyEmailPic('${id}')" title="Copy Email PIC (To/CC) for this insurer">📋 Copy Email PIC</button></div>
+    <select id="${id}" onchange="document.getElementById('${otherId}').style.display=this.value==='${INSURER_OTHER}'?'block':'none';toggleEmailPicBtn('${id}')">
       ${INSURER_LIST.map(o=>`<option ${o===selected?'selected':''}>${esc(o)}</option>`).join('')}
       <option ${showOther?'selected':''}>${INSURER_OTHER}</option>
     </select></div>
@@ -981,7 +1022,9 @@ function renderSheet(){
   if(typeSel)typeSel.addEventListener('change',()=>{
     const wrap=document.getElementById('f_refundDateWrap');
     if(wrap)wrap.style.display=REFUND_TYPES.has(typeSel.value)?'block':'none';
+    toggleEmailPicBtn('f_ins');
   });
+  toggleEmailPicBtn('f_ins');
 }
 function readSheet(){
   const c=get(openId);if(!c)return null;
@@ -1040,7 +1083,7 @@ function renderNewSheet(){
       <button class="bigbtn" onclick="addNew()">＋ Add case</button>
     </div>`;
   const typeSel=document.getElementById('n_type');
-  const toggleBank=()=>{document.getElementById('bankSection').style.display=(typeSel.value==='Policy Cancellation')?'block':'none';};
+  const toggleBank=()=>{document.getElementById('bankSection').style.display=(typeSel.value==='Policy Cancellation')?'block':'none';toggleEmailPicBtn('n_ins');};
   typeSel.addEventListener('change',toggleBank);toggleBank();
 }
 function addNew(){
