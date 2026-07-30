@@ -333,6 +333,7 @@ input[type=file]{display:none}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 // ============================================================
 // Constants
@@ -471,6 +472,7 @@ async function boot(){
     }
     autoFollowUp();
     render();renderWhoAmI();startPolling();
+    setTimeout(attemptSilentDriveReconnect,300);
   }catch(e){showLogin('Could not load data: '+((e&&e.message)||'Please try again later'));}
 }
 
@@ -541,6 +543,143 @@ function permanentlyDelete(id){
 }
 
 // ============================================================
+// Google Drive — auto-create a case folder under the team's existing
+// "Endorsement" Drive folder, one subfolder per Endorsement Type
+// (reusing whatever folders the team already has), one subfolder per
+// case inside that. Uses the full `drive` scope (not drive.file) so it
+// can write into those pre-existing folders — same reasoning as the
+// Puspakom Dashboard app's Drive integration.
+//
+// ONE-TIME SETUP (do this once, in Google Cloud Console):
+//   1. console.cloud.google.com → select/create a project
+//   2. APIs & Services → Library → enable "Google Drive API"
+//   3. APIs & Services → OAuth consent screen → add scope
+//      .../auth/drive, add team emails as test users if still in
+//      "Testing" publish status
+//   4. APIs & Services → Credentials → Create Credentials → OAuth
+//      client ID → Application type: Web application → Authorized
+//      JavaScript origins: add this app's Railway URL (and
+//      http://localhost:<port> for local testing)
+//   5. Copy the Client ID into DRIVE_CLIENT_ID below
+// ============================================================
+const DRIVE_CLIENT_ID='REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID';
+const DRIVE_SCOPE='https://www.googleapis.com/auth/drive';
+const ENDORSEMENT_ROOT_ID='1v_iOF6MzyyRAsvUssJy8ybIDX_0x9WW5'; // the team's existing "Endorsement" Drive folder
+// Endorsement Type (this app) -> existing Drive subfolder name under
+// the root above. Names the team already uses don't all match this
+// app's type wording exactly (e.g. "Ncd Withdrawal" here vs "NCD
+// Withdraw" in Drive) — this maps to the real folder so new case
+// folders land where the team already looks for them. Matched via
+// `contains` (not exact) so trailing spaces on the Drive side don't
+// matter. Anything not listed falls back to using the app's own type
+// name, creating a fresh folder if one doesn't already exist.
+const TYPE_DRIVE_FOLDER={
+  'Policy Cancellation':'Policy Cancellation',
+  'Ncd Withdrawal':'NCD Withdraw',
+  'Change Address':'Change Address',
+  'Change Model':'Change Model',
+  'Change BRN No':'Change Company BRN Number',
+  'Extend to Thai':'Extend to Thailand',
+  'Extention':'Extension',
+  'Add Agreed Value':'Add In Agreed Value',
+  'Add On E-halling':'Add E-Halling',
+  'Add On Windscreen':'Add On Windscreen',
+  'Waive Excess':'Waive Excess',
+  'NCD Entitlement':'NCD Entitlement',
+  'Cancel CN':'Cancel Cover Note',
+  'Retention':'Retention',
+  'NCD Recovery':'NCD Recovery',
+  'Reinstant Coverage':'Reinstant Coverage',
+  'Update Passport No':'Update Passport Number',
+  'Change Vehicle Class':'Change Vehicle Class',
+};
+let driveTokenClient=null,driveAccessToken=null,driveTokenExpiry=0;
+function driveReady(){return typeof google!=='undefined'&&google.accounts&&DRIVE_CLIENT_ID!=='REPLACE_WITH_GOOGLE_OAUTH_CLIENT_ID'}
+function initDriveAuth(){
+  if(!driveReady()||driveTokenClient)return;
+  driveTokenClient=google.accounts.oauth2.initTokenClient({client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPE,callback:()=>{}});
+}
+function updateDriveStatusUI(){
+  const el=document.getElementById('driveStatus');if(!el)return;
+  el.textContent=!driveReady()?'Not set up yet — see Settings for one-time setup steps.':
+    (driveAccessToken&&Date.now()<driveTokenExpiry)?'✅ Connected — new cases will get a Drive folder automatically.':
+    '⚪ Not connected — click Connect Drive so new cases get a folder automatically.';
+}
+function connectDrive(){
+  if(!driveReady()){toast('Drive is not set up yet — see Settings → Tools for setup steps');return}
+  initDriveAuth();
+  driveTokenClient.callback=(resp)=>{
+    if(resp.error){toast('Could not connect Drive: '+resp.error);return}
+    driveAccessToken=resp.access_token;
+    driveTokenExpiry=Date.now()+(resp.expires_in||3600)*1000-30000;
+    updateDriveStatusUI();toast('Drive connected ✓');
+  };
+  driveTokenClient.requestAccessToken({prompt:driveAccessToken?'':'consent'});
+}
+function attemptSilentDriveReconnect(){
+  if(!driveReady())return;
+  initDriveAuth();
+  driveTokenClient.callback=(resp)=>{if(!resp.error){driveAccessToken=resp.access_token;driveTokenExpiry=Date.now()+(resp.expires_in||3600)*1000-30000;updateDriveStatusUI();}};
+  try{driveTokenClient.requestAccessToken({prompt:''});}catch(e){}
+}
+function ensureDriveToken(){
+  return new Promise((resolve,reject)=>{
+    if(!driveReady()){reject(new Error('Drive not set up'));return}
+    if(driveAccessToken&&Date.now()<driveTokenExpiry){resolve(driveAccessToken);return}
+    initDriveAuth();
+    driveTokenClient.callback=(resp)=>{
+      if(resp.error){reject(new Error(resp.error));return}
+      driveAccessToken=resp.access_token;
+      driveTokenExpiry=Date.now()+(resp.expires_in||3600)*1000-30000;
+      updateDriveStatusUI();resolve(driveAccessToken);
+    };
+    driveTokenClient.requestAccessToken({prompt:''});
+  });
+}
+async function driveFindFolder(token,name,parentId){
+  const q=encodeURIComponent(`name contains '${name.replace(/'/g,"\\'")}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`,{headers:{Authorization:'Bearer '+token}});
+  if(!res.ok)throw new Error('Drive lookup failed ('+res.status+')');
+  const data=await res.json();
+  return data.files&&data.files.length?data.files[0].id:null;
+}
+async function driveCreateFolder(token,name,parentId){
+  const res=await fetch('https://www.googleapis.com/drive/v3/files?fields=id,webViewLink',{
+    method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify({name,mimeType:'application/vnd.google-apps.folder',parents:[parentId]})
+  });
+  if(!res.ok)throw new Error('Drive folder creation failed ('+res.status+')');
+  return res.json();
+}
+async function driveGetOrCreateFolder(token,name,parentId){
+  const existing=await driveFindFolder(token,name,parentId);
+  if(existing)return existing;
+  const created=await driveCreateFolder(token,name,parentId);
+  return created.id;
+}
+// Finds/creates the case's Drive folder and fills in driveUrl — runs in
+// the background (not awaited by the caller) so adding a case never
+// blocks on a Drive round-trip; silently no-ops if Drive isn't
+// connected, since driveUrl can always be filled in later via the
+// "Create Drive Folder" button in the case's detail sheet.
+async function autoCreateDriveFolder(c,{silent}={}){
+  try{
+    const token=await ensureDriveToken();
+    const typeFolderName=TYPE_DRIVE_FOLDER[c.type]||c.type;
+    const typeFolderId=await driveGetOrCreateFolder(token,typeFolderName,ENDORSEMENT_ROOT_ID);
+    const caseFolderName=`${c.plate} ${c.enquiryDate?fmtLong(c.enquiryDate):fmtLong(toISO(new Date()))} ${c.pic||''}`.trim();
+    const caseFolderId=await driveGetOrCreateFolder(token,caseFolderName,typeFolderId);
+    c.driveUrl=`https://drive.google.com/drive/folders/${caseFolderId}`;
+    save();
+    if(CURVIEW==='dashboard')render();
+    if(openId===c.id)renderSheet();
+    toast('📁 Drive folder ready for '+c.plate);
+  }catch(e){
+    if(!silent)toast('Could not create Drive folder — connect Drive in Settings, or add the link manually');
+  }
+}
+
+// ============================================================
 // Toast / view switching / render dispatch
 // ============================================================
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1900)}
@@ -556,6 +695,7 @@ function render(){
   renderDemoBanner();
   document.getElementById('view').innerHTML=CURVIEW==='settings'?viewSettings():CURVIEW==='ncdcalc'?viewNcdCalc():viewDashboard();
   if(CURVIEW==='ncdcalc')NcdCalc.init();
+  if(CURVIEW==='settings')updateDriveStatusUI();
 }
 function renderDemoBanner(){const has=CASES.some(c=>c.demo);
   document.getElementById('demoBanner').innerHTML=has?`<div class="demo-banner">⚠️ Showing demo data so you can see every feature. Clear it anytime and add real cases.<button onclick="clearDemo()">Clear demo data</button></div>`:''}
@@ -776,7 +916,7 @@ function renderSheet(){
       <div class="sect"><label class="h">Bank Details (for refunds)</label>
         ${field('Bank / Account','f_bank',c.bank)}
       </div>
-      <div class="sect">${linkField('Drive Link','f_driveUrl',c.driveUrl)}</div>
+      <div class="sect">${linkField('Drive Link','f_driveUrl',c.driveUrl)}${!c.driveUrl?`<button class="mini" onclick="autoCreateDriveFolder(get('${c.id}'))">📁 Create Drive Folder</button>`:''}</div>
       ${isAdmin()?`<button class="bigbtn danger" onclick="delRecord('${c.id}')">🗑️ Delete this case</button>`:''}
     </div>`;
 }
@@ -838,6 +978,7 @@ function addNew(){
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
   CASES.push(c);save();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
+  if(!c.driveUrl)autoCreateDriveFolder(c,{silent:true});
 }
 
 // ============================================================
@@ -1244,6 +1385,12 @@ function viewSettingsTools(){
       ${isAdmin()?`<button class="mini" onclick="document.getElementById('imp').click()">⬆︎ Restore</button>
       <input type="file" id="imp" accept=".json" style="display:none" onchange="importData(event)">`:''}
     </div>
+  </div>
+  <div class="sect" style="max-width:480px">
+    <label class="h">Google Drive (case folders)</label>
+    <div class="hint" style="margin:6px 0 12px" id="driveStatus">${driveReady()?'':'Not set up yet — an admin needs to create a Google OAuth Client ID once (see the comment at the top of the Drive section in the code) and paste it into DRIVE_CLIENT_ID.'}</div>
+    <button class="mini" onclick="connectDrive()">🔗 Connect Drive</button>
+    <div class="hint" style="margin-top:10px">Once connected, new cases automatically get a Drive folder created under the team's existing "Endorsement" folder (matched by Endorsement Type). Existing cases without one yet can get one from the "📁 Create Drive Folder" button inside the case.</div>
   </div>`;
 }
 function viewActivityLog(){
