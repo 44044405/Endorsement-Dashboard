@@ -102,6 +102,18 @@ body{
 .sect-head{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin:18px 2px 8px;display:flex;align-items:center;gap:8px}
 .sect-head .cnt{background:rgba(40,70,110,.08);border-radius:9px;padding:1px 8px;font-size:11px}
 .list{display:flex;flex-direction:column;gap:10px}
+.tbl{border-radius:var(--radius);overflow:hidden;background:rgba(255,255,255,.5);border:1px solid var(--line);margin-bottom:10px}
+.trow{display:grid;grid-template-columns:1.4fr 1fr 1.2fr 1.3fr 1.1fr;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:.15s}
+.trow:last-child{border-bottom:0}
+.trow:not(.head):hover{background:rgba(255,255,255,.75)}
+.trow.head{cursor:default;background:rgba(22,39,63,.04);font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);padding:10px 18px}
+.trow .tplate{font-size:14px;font-weight:660;color:var(--navy)}
+.trow .tplate small{display:block;font-size:11.5px;font-weight:500;color:var(--ink-soft);margin-top:1px}
+.trow .tcell{font-size:12.5px;color:var(--ink-soft)}
+.trow .tcell b{color:var(--ink);font-weight:600}
+.trow .tdate{font-size:11px;color:var(--ink-faint);margin-top:4px}
+.tbl-cards{display:none}
+@media(max-width:900px){.tbl{display:none}.tbl-cards{display:flex;flex-direction:column;gap:10px}}
 .card{border-radius:var(--radius);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-left:4px solid var(--line)}
 .card.st-new{border-left-color:var(--e-new)}
 .card.st-followup{border-left-color:var(--e-followup)}
@@ -605,6 +617,35 @@ function caseCard(c){
     </div>
   </div>`;
 }
+function amountText(c){
+  const amt=[];
+  if(c.gross)amt.push('Gross '+money(c.gross));
+  if(c.nett)amt.push('Nett '+money(c.nett));
+  if(c.refund)amt.push('Refund '+money(c.refund));
+  return amt.length?amt.join(' / '):'—';
+}
+function headRowHtml(){
+  return `<div class="trow head">
+    <div>Vehicle Number (PIC)</div>
+    <div>Insurance Company</div>
+    <div>Endorsement Type</div>
+    <div>Status &amp; Date</div>
+    <div>Amount</div>
+  </div>`;
+}
+function caseRow(c){
+  const dateLine=c.submittedDate?('Submitted '+fmtLong(c.submittedDate)):'Not submitted';
+  return `<div class="trow" onclick="openDetail('${c.id}')">
+    <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
+    <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
+    <div class="tcell"><b>${esc(c.type)}</b></div>
+    <div class="tcell">${statusBadge(c.status)}<div class="tdate">${dateLine}</div></div>
+    <div class="tcell"><b>${amountText(c)}</b></div>
+  </div>`;
+}
+function tableBlock(list){
+  return `<div class="tbl">${headRowHtml()}${list.map(caseRow).join('')}</div><div class="tbl-cards">${list.map(caseCard).join('')}</div>`;
+}
 function viewDashboard(){
   const rows=filteredCases();
   const total=CASES.length;
@@ -643,10 +684,10 @@ function viewDashboard(){
     body=STATUS_ORDER.map(k=>{
       const group=rows.filter(c=>c.status===k);
       if(!group.length)return'';
-      return `<div class="sect-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${group.length}</span></div><div class="list">${group.map(caseCard).join('')}</div>`;
+      return `<div class="sect-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${group.length}</span></div>${tableBlock(group)}`;
     }).join('');
   }else{
-    body=`<div class="list">${rows.filter(c=>c.status===activeStatusTab).map(caseCard).join('')}</div>`;
+    body=tableBlock(rows.filter(c=>c.status===activeStatusTab));
   }
 
   return metrics+filters+tabs+body;
