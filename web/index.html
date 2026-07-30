@@ -112,6 +112,10 @@ body{
 .trow .tcell{font-size:12.5px;color:var(--ink-soft)}
 .trow .tcell b{color:var(--ink);font-weight:600}
 .trow .tdate{font-size:11px;color:var(--ink-faint);margin-top:4px}
+.trow.head .sortable{cursor:pointer;display:flex;align-items:center;gap:4px;user-select:none;transition:.15s}
+.trow.head .sortable:hover{color:var(--navy)}
+.sort-ic{font-size:9px;opacity:.45}
+.sort-ic.on{opacity:1;color:var(--accent)}
 .tbl-cards{display:none}
 @media(max-width:900px){.tbl{display:none}.tbl-cards{display:flex;flex-direction:column;gap:10px}}
 .card{border-radius:var(--radius);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;border-left:4px solid var(--line)}
@@ -357,7 +361,7 @@ const STATUS_CFG={
   new:{l:'New',ic:'🆕',order:0},
   followup:{l:'Follow Up',ic:'🔴',order:1},
   submitted:{l:'Submitted',ic:'📤',order:2},
-  pendingdone:{l:'Pending Done',ic:'⏳',order:3},
+  pendingdone:{l:'Issue',ic:'⚠️',order:3},
   pendingpay:{l:'Pending Payment',ic:'💳',order:4},
   pendingletter:{l:'Pending Letter',ic:'📝',order:5},
   done:{l:'Done',ic:'✅',order:6}
@@ -561,6 +565,23 @@ function clearDemo(){if(!confirm('Clear all demo data?'))return;CASES=CASES.filt
 // Dashboard view: metrics, filters, status tabs, card list
 // ============================================================
 let fltSearch='',fltType='',fltPic='',fltIns='',activeStatusTab='all',searchTimer=null;
+let dSortKey=null,dSortDir=1;
+function setDSort(key){if(dSortKey===key){dSortDir=-dSortDir}else{dSortKey=key;dSortDir=1}render()}
+function dSortIcon(key){if(dSortKey!==key)return '<span class="sort-ic">▽</span>';return dSortDir===1?'<span class="sort-ic on">▲</span>':'<span class="sort-ic on">▼</span>'}
+function dSortVal(c,key){
+  if(key==='status')return STATUS_CFG[c.status]?STATUS_CFG[c.status].order:0;
+  if(key==='amount')return (+c.gross||0)+(+c.nett||0)+(+c.refund||0);
+  return (c[key]||'')+'';
+}
+function applyDSort(rows){
+  if(!dSortKey)return rows;
+  const k=dSortKey,dir=dSortDir;
+  return [...rows].sort((a,b)=>{
+    const va=dSortVal(a,k),vb=dSortVal(b,k);
+    if(typeof va==='number'||typeof vb==='number')return (va-vb)*dir;
+    return (''+va).localeCompare(''+vb)*dir;
+  });
+}
 function setSearch(v){fltSearch=v.trim();clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>{
     const wasFocused=document.activeElement&&document.activeElement.id==='searchInput';
@@ -626,11 +647,11 @@ function amountText(c){
 }
 function headRowHtml(){
   return `<div class="trow head">
-    <div>Vehicle Number (PIC)</div>
-    <div>Insurance Company</div>
-    <div>Endorsement Type</div>
-    <div>Status &amp; Date</div>
-    <div>Amount</div>
+    <div class="sortable" onclick="setDSort('plate')">Vehicle Number (PIC) ${dSortIcon('plate')}</div>
+    <div class="sortable" onclick="setDSort('ins')">Insurance Company ${dSortIcon('ins')}</div>
+    <div class="sortable" onclick="setDSort('type')">Endorsement Type ${dSortIcon('type')}</div>
+    <div class="sortable" onclick="setDSort('status')">Status &amp; Date ${dSortIcon('status')}</div>
+    <div class="sortable" onclick="setDSort('amount')">Amount ${dSortIcon('amount')}</div>
   </div>`;
 }
 function caseRow(c){
@@ -644,7 +665,8 @@ function caseRow(c){
   </div>`;
 }
 function tableBlock(list){
-  return `<div class="tbl">${headRowHtml()}${list.map(caseRow).join('')}</div><div class="tbl-cards">${list.map(caseCard).join('')}</div>`;
+  const sorted=applyDSort(list);
+  return `<div class="tbl">${headRowHtml()}${sorted.map(caseRow).join('')}</div><div class="tbl-cards">${sorted.map(caseCard).join('')}</div>`;
 }
 function viewDashboard(){
   const rows=filteredCases();
