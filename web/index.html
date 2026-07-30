@@ -103,7 +103,7 @@ body{
 .sect-head .cnt{background:rgba(40,70,110,.08);border-radius:9px;padding:1px 8px;font-size:11px}
 .list{display:flex;flex-direction:column;gap:10px}
 .tbl{border-radius:var(--radius);overflow:hidden;background:rgba(255,255,255,.5);border:1px solid var(--line);margin-bottom:10px}
-.trow{display:grid;grid-template-columns:1.4fr 1fr 1.2fr 1.3fr 1.1fr;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:.15s}
+.trow{display:grid;grid-template-columns:.9fr 1.4fr 1fr 1.2fr 1.3fr 1.1fr;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:.15s}
 .trow:last-child{border-bottom:0}
 .trow:not(.head):hover{background:rgba(255,255,255,.75)}
 .trow.head{cursor:default;background:rgba(22,39,63,.04);font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);padding:10px 18px}
@@ -647,6 +647,7 @@ function amountText(c){
 }
 function headRowHtml(){
   return `<div class="trow head">
+    <div class="sortable" onclick="setDSort('enquiryDate')">Enquiry Date ${dSortIcon('enquiryDate')}</div>
     <div class="sortable" onclick="setDSort('plate')">Vehicle Number (PIC) ${dSortIcon('plate')}</div>
     <div class="sortable" onclick="setDSort('ins')">Insurance Company ${dSortIcon('ins')}</div>
     <div class="sortable" onclick="setDSort('type')">Endorsement Type ${dSortIcon('type')}</div>
@@ -657,6 +658,7 @@ function headRowHtml(){
 function caseRow(c){
   const dateLine=c.submittedDate?('Submitted '+fmtLong(c.submittedDate)):'Not submitted';
   return `<div class="trow" onclick="openDetail('${c.id}')">
+    <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}</div>
     <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
     <div class="tcell"><b>${esc(c.type)}</b></div>
