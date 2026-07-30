@@ -700,6 +700,9 @@ function renderSheet(){
         <div class="grid2">${field('PIC','f_pic',c.pic,'select',PIC_LIST)}${field('Enquiry Date','f_enquiryDate',c.enquiryDate,'date')}</div>
         ${field('Remark','f_remark',c.remark,'textarea')}
       </div>
+      <div class="sect"><label class="h">Amounts</label>
+        <div class="grid3">${field('Gross (RM)','f_gross',c.gross,'number')}${field('Nett (RM)','f_nett',c.nett,'number')}${field('Refund (RM)','f_refund',c.refund,'number')}</div>
+      </div>
       <div class="sect"><label class="h">Status &amp; Tracking</label>
         ${field('Status','f_status',STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'','select',STATUS_ORDER.map(k=>STATUS_CFG[k].l))}
         ${field('Submitted Date','f_submittedDate',c.submittedDate,'date')}
@@ -707,9 +710,6 @@ function renderSheet(){
       </div>
       <div class="sect"><label class="h">Bank Details (for refunds)</label>
         ${field('Bank / Account','f_bank',c.bank)}
-      </div>
-      <div class="sect"><label class="h">Amounts</label>
-        <div class="grid3">${field('Refund (RM)','f_refund',c.refund,'number')}${field('Gross (RM)','f_gross',c.gross,'number')}${field('Nett (RM)','f_nett',c.nett,'number')}</div>
       </div>
       <div class="sect">${linkField('Drive Link','f_driveUrl',c.driveUrl)}</div>
       ${isAdmin()?`<button class="bigbtn danger" onclick="delRecord('${c.id}')">🗑️ Delete this case</button>`:''}
@@ -897,6 +897,18 @@ const NcdCalc=(()=>{
     hint.textContent='Max NCD for '+type+': '+NCD_OPTIONS[type].slice(-1)[0]+'%';
   }
   function toggleOther(){document.getElementById('ncdOtherInsurerWrap').style.display=document.getElementById('ncdInsurer').value==='other'?'block':'none'}
+  // Auto-fill Gross/Nett on the matching case card, if this plate already
+  // has a case in the dashboard — so running the calculator for an existing
+  // enquiry doesn't require re-typing the amounts into the case separately.
+  function syncToCase(plate,customerPay,agentPay){
+    const match=CASES.find(c=>c.plate===plate);
+    if(!match){toast('Calculated · no matching case found for '+plate+' (amounts not synced)');return}
+    match.gross=+customerPay.toFixed(2);
+    match.nett=+agentPay.toFixed(2);
+    save();
+    logActivity('Synced NCD Calculator amounts',`${plate} · Gross ${fmt(match.gross)} / Nett ${fmt(match.nett)}`);
+    toast('Synced to case '+plate+' · Gross '+fmt(match.gross)+' / Nett '+fmt(match.nett));
+  }
   function calculate(){
     const plate=document.getElementById('ncdPlateNo').value.trim(),holder=document.getElementById('ncdHolderName').value.trim(),
           vType=document.getElementById('ncdVehicleType').value,ncdPct=document.getElementById('ncdPct').value,
@@ -913,6 +925,7 @@ const NcdCalc=(()=>{
     renderResults(lastResult);
     document.getElementById('ncdActionRow').style.display='flex';
     document.getElementById('ncdResultBadge').textContent=plate;
+    syncToCase(plate,customerPay,agentPay);
     updateRemaining();
   }
   function renderResults(r){
