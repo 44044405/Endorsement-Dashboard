@@ -28,6 +28,7 @@
   --e-pendingdone:#a8843f;--e-pendingdone-bg:rgba(168,132,63,.15);
   --e-pendingpay:#5b62a6;--e-pendingpay-bg:rgba(91,98,166,.15);
   --e-pendingletter:#9a8255;--e-pendingletter-bg:rgba(173,148,98,.16);
+  --e-pendingsigned:#7d6aa8;--e-pendingsigned-bg:rgba(125,106,168,.16);
   --e-done:#5f8a5f;--e-done-bg:rgba(95,138,95,.16);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -103,6 +104,9 @@ body{
 .stabs button.on.zero{opacity:1}
 .stabs .tcount{font-size:11px;font-weight:700;padding:1.5px 7px;border-radius:9px;background:rgba(22,39,63,.07);color:var(--ink-faint);min-width:8px;text-align:center}
 .stabs button.on .tcount{background:rgba(255,255,255,.25)!important;color:#fff!important}
+.stabs-select{border:0;background:transparent;font:inherit;font-size:12.5px;font-weight:560;color:var(--ink-soft);padding:7px 10px;border-radius:9px;cursor:pointer;max-width:240px}
+.stabs-select:hover{background:rgba(22,39,63,.05)}
+.stabs-select:focus{outline:2px solid var(--accent);outline-offset:1px}
 
 .sect-head{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin:18px 2px 8px;display:flex;align-items:center;gap:8px}
 .sect-head .cnt{background:rgba(40,70,110,.08);border-radius:9px;padding:1px 8px;font-size:11px}
@@ -132,6 +136,7 @@ body{
 .card.st-pendingdone{border-left-color:var(--e-pendingdone)}
 .card.st-pendingpay{border-left-color:var(--e-pendingpay)}
 .card.st-pendingletter{border-left-color:var(--e-pendingletter)}
+.card.st-pendingsigned{border-left-color:var(--e-pendingsigned)}
 .card.st-done{border-left-color:var(--e-done);opacity:.78}
 .card.stale-alert{border-left-color:var(--e-followup)!important;background:rgba(177,111,98,.07)}
 .cmain{flex:1;min-width:0}
@@ -149,6 +154,7 @@ body{
 .b-pendingdone{background:var(--e-pendingdone-bg);color:var(--e-pendingdone)}
 .b-pendingpay{background:var(--e-pendingpay-bg);color:var(--e-pendingpay)}
 .b-pendingletter{background:var(--e-pendingletter-bg);color:var(--e-pendingletter)}
+.b-pendingsigned{background:var(--e-pendingsigned-bg);color:var(--e-pendingsigned)}
 .b-done{background:var(--e-done-bg);color:var(--e-done)}
 .b-urgent{background:var(--e-followup-bg)!important;color:var(--e-followup)!important}
 .new-tag{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.3px;color:#fff;background:var(--e-followup);padding:1.5px 6px;border-radius:7px;vertical-align:middle}
@@ -428,8 +434,12 @@ const STATUS_CFG={
   submitted:{l:'Submitted',ic:'📤',order:2},
   pendingdone:{l:'Issue',ic:'⚠️',order:3},
   pendingpay:{l:'Pending Payment',ic:'💳',order:4},
-  pendingletter:{l:'Pending Letter',ic:'📝',order:5},
-  done:{l:'Done',ic:'✅',order:6}
+  pendingletter:{l:'Pending Endorsement Letter',ic:'📝',order:5},
+  // Added 2026-07-31 — placed after Pending Endorsement Letter, before Done (waiting on the customer's
+  // signed form back before the case can close). Teoh said "push it live" before confirming full order
+  // for the other 3 statuses, so this placement is a best guess — flag if it should sit elsewhere.
+  pendingsigned:{l:'Pending Signed Form',ic:'✍️',order:6},
+  done:{l:'Done',ic:'✅',order:7}
 };
 const STATUS_ORDER=Object.keys(STATUS_CFG);
 
@@ -937,7 +947,7 @@ function viewDashboard(){
   const rows=filteredCases();
   const total=CASES.length;
   const needAttn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
-  const inProgress=CASES.filter(c=>['submitted','pendingdone','pendingpay','pendingletter'].includes(c.status)).length;
+  const inProgress=CASES.filter(c=>['submitted','pendingdone','pendingpay','pendingletter','pendingsigned'].includes(c.status)).length;
   const doneThisMonth=CASES.filter(c=>c.status==='done'&&isDoneThisMonth(c)).length;
   const counts={};STATUS_ORDER.forEach(k=>counts[k]=CASES.filter(c=>c.status===k).length);
 
@@ -959,12 +969,14 @@ function viewDashboard(){
     <select onchange="setFltIns(this.value)"><option value="">All Insurance</option>${allIns.map(i=>`<option value="${esc(i)}" ${i===fltIns?'selected':''}>${esc(i)}</option>`).join('')}</select>
   </div>`;
 
+  // Only "All" stays as a tab button; every other status moved into a dropdown (still shows counts) so the
+  // bar doesn't get crowded as more statuses get added — see Teoh's request 2026-07-31.
   const tabs=`<div class="seg stabs">
     <button class="${activeStatusTab==='all'?'on':''}" onclick="setStatusTab('all')">All <span class="tcount">${CASES.length}</span></button>
-    ${STATUS_ORDER.map(k=>{
-      const n=counts[k],zero=n===0;
-      return `<button class="${activeStatusTab===k?'on':''}${zero?' zero':''}" onclick="setStatusTab('${k}')">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="tcount" style="${zero?'':`background:var(--e-${k}-bg);color:var(--e-${k})`}">${n}</span></button>`;
-    }).join('')}
+    <select class="stabs-select" onchange="setStatusTab(this.value)">
+      <option value="" ${activeStatusTab==='all'?'selected':''} disabled>Filter by status…</option>
+      ${STATUS_ORDER.map(k=>`<option value="${k}" ${activeStatusTab===k?'selected':''}>${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} — ${counts[k]}</option>`).join('')}
+    </select>
   </div>`;
 
   let body;
