@@ -111,6 +111,8 @@ body{
 .trow{display:grid;grid-template-columns:.85fr 1.3fr .9fr 1.1fr 1.2fr .8fr .8fr .9fr;gap:12px;align-items:center;padding:13px 18px;border-bottom:1px solid var(--line);cursor:pointer;transition:.15s}
 .trow:last-child{border-bottom:0}
 .trow:not(.head):hover{background:rgba(255,255,255,.75)}
+.trow.stale-alert{background:rgba(177,111,98,.07)}
+.trow.stale-alert:not(.head):hover{background:rgba(177,111,98,.13)}
 .trow.head{cursor:default;background:rgba(22,39,63,.04);font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--ink-faint);padding:10px 18px}
 .trow .tplate{font-size:14px;font-weight:660;color:var(--navy)}
 .trow .tplate small{display:block;font-size:11.5px;font-weight:500;color:var(--ink-soft);margin-top:1px}
@@ -131,6 +133,7 @@ body{
 .card.st-pendingpay{border-left-color:var(--e-pendingpay)}
 .card.st-pendingletter{border-left-color:var(--e-pendingletter)}
 .card.st-done{border-left-color:var(--e-done);opacity:.78}
+.card.stale-alert{border-left-color:var(--e-followup)!important;background:rgba(177,111,98,.07)}
 .cmain{flex:1;min-width:0}
 .cmain h3{font-size:16px;font-weight:660;color:var(--navy);display:inline}
 .type-pill{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;font-weight:600;background:rgba(44,74,115,.1);color:var(--navy)}
@@ -147,6 +150,8 @@ body{
 .b-pendingpay{background:var(--e-pendingpay-bg);color:var(--e-pendingpay)}
 .b-pendingletter{background:var(--e-pendingletter-bg);color:var(--e-pendingletter)}
 .b-done{background:var(--e-done-bg);color:var(--e-done)}
+.b-urgent{background:var(--e-followup-bg)!important;color:var(--e-followup)!important}
+.new-tag{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.3px;color:#fff;background:var(--e-followup);padding:1.5px 6px;border-radius:7px;vertical-align:middle}
 .cage{font-size:11px;color:var(--ink-faint)}
 
 .empty{text-align:center;color:var(--ink-soft);padding:48px 20px;border-radius:var(--radius)}
@@ -418,7 +423,7 @@ function copyEmailPic(insId){
     .catch(()=>toast('Could not copy to clipboard'));
 }
 const STATUS_CFG={
-  new:{l:'New',ic:'🆕',order:0},
+  new:{l:'Pending Proceed',ic:'🆕',order:0},
   followup:{l:'Follow Up',ic:'🔴',order:1},
   submitted:{l:'Submitted',ic:'📤',order:2},
   pendingdone:{l:'Issue',ic:'⚠️',order:3},
@@ -765,7 +770,8 @@ function clearDemo(){if(!confirm('Clear all demo data?'))return;CASES=CASES.filt
 // Dashboard view: metrics, filters, status tabs, card list
 // ============================================================
 let fltSearch='',fltType='',fltPic='',fltIns='',activeStatusTab='all',searchTimer=null;
-let dSortKey=null,dSortDir=1;
+// Defaults to newest enquiry first — Teoh wants the freshest cases up top without having to click the header.
+let dSortKey='enquiryDate',dSortDir=-1;
 function setDSort(key){if(dSortKey===key){dSortDir=-dSortDir}else{dSortKey=key;dSortDir=1}render()}
 function dSortIcon(key){if(dSortKey!==key)return '<span class="sort-ic">▽</span>';return dSortDir===1?'<span class="sort-ic on">▲</span>':'<span class="sort-ic on">▼</span>'}
 function dSortVal(c,key){
@@ -818,7 +824,11 @@ function ageLabel(c){
   if(d==null)return'';
   return d===0?'today':(-d)+'d ago';
 }
-function statusBadge(status){const s=STATUS_CFG[status]||{l:status,ic:''};return `<span class="status-badge b-${status}">${s.ic} ${s.l}</span>`}
+// Keyed in today — shows a "NEW" tag next to the date that disappears on its own the next calendar day.
+function isFreshToday(c){return !!c.createdAt&&toISO(new Date(c.createdAt))===toISO(new Date())}
+// Still Pending Proceed 36+ hours after keying in, with no status change since — needs a red alert to stand out.
+function isStalePending(c){return c.status==='new'&&!!c.createdAt&&(Date.now()-c.createdAt)/36e5>=36}
+function statusBadge(status,urgent){const s=STATUS_CFG[status]||{l:status,ic:''};return `<span class="status-badge b-${status}${urgent?' b-urgent':''}">${urgent?'⏰ ':''}${s.ic} ${s.l}</span>`}
 function caseCard(c){
   const bits=[];
   if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
@@ -829,15 +839,16 @@ function caseCard(c){
   if(c.refundDate)bits.push(`<span class="tag">📅 Refund Date ${fmtLong(c.refundDate)}</span>`);
   else if(REFUND_TYPES.has(c.type))bits.push(`<span class="tag" style="color:var(--e-followup);font-weight:600">⏳ Refund Pending</span>`);
   if(c.driveUrl)bits.push(`<a class="tag" href="${c.driveUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Drive Link</a>`);
-  return `<div class="card glass lift st-${c.status}" onclick="openDetail('${c.id}')">
+  const stale=isStalePending(c);
+  return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="cmain">
-      <h3>${esc(c.plate)}</h3><span class="type-pill">${esc(c.type)}</span>
+      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>
       <div class="cmeta">${bits.join('')}</div>
       ${c.remark?`<div class="cdesc">${esc(c.remark)}</div>`:''}
       ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
     </div>
     <div class="cright">
-      ${statusBadge(c.status)}
+      ${statusBadge(c.status,stale)}
       <div class="cage">${ageLabel(c)}</div>
     </div>
   </div>`;
@@ -869,12 +880,13 @@ function headRowHtml(){
 }
 function caseRow(c){
   const dateLine=c.submittedDate?('Submitted '+fmtLong(c.submittedDate)):'Not submitted';
-  return `<div class="trow" onclick="openDetail('${c.id}')">
-    <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}</div>
+  const stale=isStalePending(c);
+  return `<div class="trow${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
+    <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</div>
     <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
     <div class="tcell"><b>${esc(c.type)}</b></div>
-    <div class="tcell">${statusBadge(c.status)}<div class="tdate">${dateLine}</div></div>
+    <div class="tcell">${statusBadge(c.status,stale)}<div class="tdate">${dateLine}</div></div>
     <div class="tcell"><b>${amountText(c)}</b></div>
     <div class="tcell">${c.refund?money(c.refund):'—'}</div>
     <div class="tcell">${refundDateText(c)}</div>
@@ -898,7 +910,7 @@ function viewDashboard(){
 
   const metrics=`<div class="metrics">
     <div class="metric glass"><div class="mlab">Total Cases</div><div class="mval">${total}</div></div>
-    <div class="metric glass m-attn"><div class="mlab">Need Attention</div><div class="mval">${needAttn}</div><div class="msub">New + Follow Up</div></div>
+    <div class="metric glass m-attn"><div class="mlab">Need Attention</div><div class="mval">${needAttn}</div><div class="msub">Pending Proceed + Follow Up</div></div>
     <div class="metric glass m-prog"><div class="mlab">In Progress</div><div class="mval">${inProgress}</div><div class="msub">Submitted → Pending stages</div></div>
     <div class="metric glass m-done"><div class="mlab">Completed</div><div class="mval">${doneThisMonth}</div><div class="msub">Done this month</div></div>
   </div>`;
