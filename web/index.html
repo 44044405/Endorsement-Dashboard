@@ -727,20 +727,57 @@ async function driveGetOrCreateFolder(token,name,parentId){
 // blocks on a Drive round-trip; silently no-ops if Drive isn't
 // connected, since driveUrl can always be filled in later via the
 // "Create Drive Folder" button in the case's detail sheet.
+// Shared by autoCreateDriveFolder (existing cases) and getDriveLinkForNewCase (still-being-drafted New Case form).
+async function resolveCaseDriveUrl(type,plate,enquiryDate,pic){
+  const token=await ensureDriveToken();
+  const typeFolderName=TYPE_DRIVE_FOLDER[type]||type;
+  const typeFolderId=await driveGetOrCreateFolder(token,typeFolderName,ENDORSEMENT_ROOT_ID);
+  const caseFolderName=`${plate} ${enquiryDate?fmtLong(enquiryDate):fmtLong(toISO(new Date()))} ${pic||''}`.trim();
+  const caseFolderId=await driveGetOrCreateFolder(token,caseFolderName,typeFolderId);
+  return `https://drive.google.com/drive/folders/${caseFolderId}`;
+}
 async function autoCreateDriveFolder(c,{silent}={}){
   try{
-    const token=await ensureDriveToken();
-    const typeFolderName=TYPE_DRIVE_FOLDER[c.type]||c.type;
-    const typeFolderId=await driveGetOrCreateFolder(token,typeFolderName,ENDORSEMENT_ROOT_ID);
-    const caseFolderName=`${c.plate} ${c.enquiryDate?fmtLong(c.enquiryDate):fmtLong(toISO(new Date()))} ${c.pic||''}`.trim();
-    const caseFolderId=await driveGetOrCreateFolder(token,caseFolderName,typeFolderId);
-    c.driveUrl=`https://drive.google.com/drive/folders/${caseFolderId}`;
+    c.driveUrl=await resolveCaseDriveUrl(c.type,c.plate,c.enquiryDate,c.pic);
     save();
     if(CURVIEW==='dashboard')render();
     if(openId===c.id)renderSheet();
     toast('📁 Drive folder ready for '+c.plate);
   }catch(e){
     if(!silent)toast('Could not create Drive folder — connect Drive in Settings, or add the link manually');
+  }
+}
+// "🔗 Get Drive Link" button in the New Case form — creates/finds the folder right away from whatever's
+// currently typed in the form (case isn't saved yet) and fills the Drive Link field with it, so PIC can
+// open it and start uploading documents before even hitting "Add case".
+async function getDriveLinkForNewCase(){
+  const g=id=>{const e=document.getElementById(id);return e?e.value:''};
+  const plate=g('n_plate').trim().toUpperCase();
+  if(!plate){toast('Please enter a vehicle number first');return}
+  const btn=document.getElementById('n_getDriveBtn');
+  if(btn){btn.disabled=true;btn.textContent='📁 Creating…';}
+  try{
+    const type=readTypeValue('n_type')||TYPE_LIST[0];
+    const pic=g('n_pic')||PIC_LIST[0];
+    const enquiryDate=g('n_enquiryDate')||toISO(new Date());
+    const url=await resolveCaseDriveUrl(type,plate,enquiryDate,pic);
+    const urlInput=document.getElementById('n_driveUrl');if(urlInput)urlInput.value=url;
+    // linkField() only renders the "Open ↗" link at initial render time, so patch it in directly here
+    // rather than re-rendering the whole form (which would wipe out whatever the PIC has already typed).
+    let openLink=document.getElementById('n_driveUrlOpen');
+    if(!openLink&&urlInput){
+      openLink=document.createElement('a');
+      openLink.id='n_driveUrlOpen';openLink.className='openlink';openLink.target='_blank';openLink.rel='noopener';
+      openLink.textContent='Open ↗';
+      const label=urlInput.closest('.fld').querySelector('label');
+      if(label)label.appendChild(openLink);
+    }
+    if(openLink)openLink.href=url;
+    toast('📁 Drive folder ready — click "Open ↗" to upload documents');
+  }catch(e){
+    toast('Could not create Drive folder — connect Drive in Settings first');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🔗 Get Drive Link';}
   }
 }
 
@@ -955,8 +992,8 @@ function field(label,id,val,type,opts){val=val==null?'':val;
   if(type==='textarea')return `<div class="fld"><label>${label}</label><textarea id="${id}">${esc(val)}</textarea></div>`;
   if(type==='date')return `<div class="fld"><label>${label}</label><input id="${id}" type="date" value="${val}"></div>`;
   return `<div class="fld"><label>${label}</label><input id="${id}" type="${type||'text'}" value="${esc(val)}"></div>`}
-function linkField(label,id,val){val=val||'';const open=/^https?:\/\//i.test(val)?`<a class="openlink" href="${val}" target="_blank" rel="noopener">Open ↗</a>`:'';
-  return `<div class="fld"><label>${label}${open}</label><input id="${id}" type="text" value="${esc(val)}" placeholder="paste link…"></div>`}
+function linkField(label,id,val,extraBtn){val=val||'';const open=/^https?:\/\//i.test(val)?`<a class="openlink" href="${val}" target="_blank" rel="noopener">Open ↗</a>`:'';
+  return `<div class="fld"><div class="fld-label-row"><label>${label}${open}</label>${extraBtn||''}</div><input id="${id}" type="text" value="${esc(val)}" placeholder="paste link…"></div>`}
 // Endorsement Type dropdown — A-Z sorted, with the two most-common types bolded.
 // allowNew=true (New Case form only) pins a "+ New Type" option at the top that reveals a free-text
 // input for adding a type not yet in the list; existing-case editing never shows this option.
@@ -1086,7 +1123,7 @@ function renderNewSheet(){
         <div class="grid3">${field('Vehicle Number','n_plate','')}${typeField('n_type','Policy Cancellation',true)}${insField('n_ins','')}</div>
         <div class="grid2">${field('PIC','n_pic',PIC_LIST[0],'select',PIC_LIST)}${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}</div>
         ${field('Remark','n_remark','','textarea')}
-        ${linkField('Drive File Link','n_driveUrl','')}
+        ${linkField('Drive File Link','n_driveUrl','','<button type="button" class="copy-pic" id="n_getDriveBtn" onclick="getDriveLinkForNewCase()">🔗 Get Drive Link</button>')}
       </div>
       <div class="sect" id="bankSection" style="display:none"><label class="h">Bank Details (for cancellation refund)</label>
         <div class="grid2">${field('Bank Name','n_bankName','')}${field('Account No','n_acctNo','')}</div>
