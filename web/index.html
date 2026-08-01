@@ -189,6 +189,7 @@ body{
 .copy-pic:hover{background:rgba(61,90,130,.22)}
 .fld input,.fld select,.fld textarea{width:100%;font:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:12px;padding:11px 13px;transition:.2s;outline:none}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--navy-soft);background:#fff;box-shadow:0 0 0 3.5px rgba(44,74,115,.16)}
+.date-hint{font-size:11px;color:var(--ink-faint);margin:4px 2px 0}
 .fld textarea{resize:vertical;min-height:62px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px}
@@ -556,7 +557,7 @@ async function boot(){
 // never auto-loaded into a real Supabase-backed session)
 // ============================================================
 function seed(){
-  const mk=o=>Object.assign({id:uid(),ins:'',pic:'Moey',remark:'',bank:'',followup:'',status:'new',
+  const mk=o=>Object.assign({id:uid(),ins:'',pic:'Moey',contact:'',remark:'',bank:'',followup:'',status:'new',
     submittedDate:'',enquiryDate:toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:'',demo:true},o);
   return [
     mk({plate:'KBV668',type:'Ncd Withdrawal',ins:'Etiqa',pic:'Moey',status:'new',remark:'Not submitted yet',refund:2521.63}),
@@ -880,6 +881,7 @@ function caseCard(c){
   const bits=[];
   if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
   if(c.pic)bits.push(`<span class="tag">👤 <b>${esc(c.pic)}</b></span>`);
+  if(c.contact)bits.push(`<span class="tag">📞 ${esc(c.contact)}</span>`);
   bits.push(`<span class="tag">${c.submittedDate?'Submitted '+fmtLong(c.submittedDate):'Not submitted'}</span>`);
   if(c.gross||c.nett)bits.push(`<span class="tag">💰 ${c.gross?('Gross '+money(c.gross)):''}${c.gross&&c.nett?' / ':''}${c.nett?('Nett '+money(c.nett)):''}</span>`);
   if(c.refund)bits.push(`<span class="tag">Refund ${money(c.refund)}</span>`);
@@ -1002,7 +1004,11 @@ let openId=null;
 function field(label,id,val,type,opts){val=val==null?'':val;
   if(type==='select')return `<div class="fld"><label>${label}</label><select id="${id}">${opts.map(o=>`<option ${o===val?'selected':''}>${esc(o)}</option>`).join('')}</select></div>`;
   if(type==='textarea')return `<div class="fld"><label>${label}</label><textarea id="${id}">${esc(val)}</textarea></div>`;
-  if(type==='date')return `<div class="fld"><label>${label}</label><input id="${id}" type="date" value="${val}"></div>`;
+  // Chromium ignores lang="en-GB" on <input type=date> and always shows the browser's own locale order
+  // (mm/dd/yyyy for US-locale Chrome) — no reliable cross-browser way to force the native picker itself
+  // to DD/MM/YYYY, so a plain-language hint underneath (same "31 Jul 2026" style used everywhere else in
+  // this app) is the fix: it's always unambiguous no matter how the native input renders.
+  if(type==='date')return `<div class="fld"><label>${label}</label><input id="${id}" type="date" value="${val}" oninput="const h=document.getElementById('${id}Hint');if(h)h.textContent=this.value?fmtLong(this.value):''"><div class="date-hint" id="${id}Hint">${val?fmtLong(val):''}</div></div>`;
   return `<div class="fld"><label>${label}</label><input id="${id}" type="${type||'text'}" value="${esc(val)}"></div>`}
 function linkField(label,id,val,extraBtn){val=val||'';const open=/^https?:\/\//i.test(val)?`<a class="openlink" href="${val}" target="_blank" rel="noopener">Open ↗</a>`:'';
   return `<div class="fld"><div class="fld-label-row"><label>${label}${open}</label>${extraBtn||''}</div><input id="${id}" type="text" value="${esc(val)}" placeholder="paste link…"></div>`}
@@ -1060,13 +1066,14 @@ function renderSheet(){
       <div class="sheet-h-actions"><button class="hsave" onclick="saveSheet()">💾 Save</button><button class="x" onclick="closeSheet()">✕</button></div></div>
     <div class="sheet-b">
       <div class="sect"><label class="h">Case Info</label>
-        <div class="grid3">${field('Vehicle Number','f_plate',c.plate)}${typeField('f_type',c.type)}${insField('f_ins',c.ins)}</div>
+        <div class="grid2">${field('Vehicle Number','f_plate',c.plate)}${field('Contact Number','f_contact',c.contact,'tel')}</div>
+        <div class="grid2">${typeField('f_type',c.type)}${insField('f_ins',c.ins)}</div>
         <div class="grid2">${field('PIC','f_pic',c.pic,'select',PIC_LIST)}${field('Enquiry Date','f_enquiryDate',c.enquiryDate,'date')}</div>
         ${field('Remark','f_remark',c.remark,'textarea')}
       </div>
       <div class="sect"><label class="h">Amounts</label>
         <div class="grid3">${field('Gross (RM)','f_gross',c.gross,'number')}${field('Nett (RM)','f_nett',c.nett,'number')}${field('Refund (RM)','f_refund',c.refund,'number')}</div>
-        <div class="fld" id="f_refundDateWrap" style="display:${REFUND_TYPES.has(c.type)?'block':'none'}"><label>Refund Date</label><input id="f_refundDate" type="date" value="${c.refundDate||''}"></div>
+        <div class="fld" id="f_refundDateWrap" style="display:${REFUND_TYPES.has(c.type)?'block':'none'}"><label>Refund Date</label><input id="f_refundDate" type="date" value="${c.refundDate||''}" oninput="const h=document.getElementById('f_refundDateHint');if(h)h.textContent=this.value?fmtLong(this.value):''"><div class="date-hint" id="f_refundDateHint">${c.refundDate?fmtLong(c.refundDate):''}</div></div>
       </div>
       <div class="sect"><label class="h">Status &amp; Tracking</label>
         ${field('Status','f_status',STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'','select',STATUS_ORDER.map(k=>STATUS_CFG[k].l))}
@@ -1092,6 +1099,7 @@ function readSheet(){
   const g=id=>{const e=document.getElementById(id);return e?e.value:undefined};
   const LABEL_TO_KEY=Object.fromEntries(STATUS_ORDER.map(k=>[STATUS_CFG[k].l,k]));
   c.plate=(g('f_plate')||c.plate).trim().toUpperCase();
+  c.contact=g('f_contact')||'';
   c.type=g('f_type')||c.type;
   c.ins=readInsValue('f_ins');
   c.pic=g('f_pic')||c.pic;
@@ -1132,10 +1140,12 @@ function renderNewSheet(){
     <div class="sheet-h"><div><h2>New Case</h2><div class="sub">Add a new endorsement enquiry</div></div><button class="x" onclick="closeSheet()">✕</button></div>
     <div class="sheet-b">
       <div class="sect"><label class="h">Case details</label>
-        <div class="grid3">${field('Vehicle Number','n_plate','')}${typeField('n_type','Policy Cancellation',true)}${insField('n_ins','')}</div>
+        <div class="grid2">${field('Vehicle Number','n_plate','')}${field('Contact Number','n_contact','','tel')}</div>
+        <div class="grid2">${typeField('n_type','Policy Cancellation',true)}${insField('n_ins','')}</div>
         <div class="grid2">${field('PIC','n_pic',PIC_LIST[0],'select',PIC_LIST)}${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}</div>
         ${field('Remark','n_remark','','textarea')}
         ${linkField('Drive File Link','n_driveUrl','','<button type="button" class="copy-pic" id="n_getDriveBtn" onclick="getDriveLinkForNewCase()">🔗 Get Drive Link</button>')}
+        <button type="button" class="mini" style="margin-top:8px" onclick="copyNotifyMessageForNewCase()">📋 Copy Notification Message</button>
       </div>
       <div class="sect" id="bankSection" style="display:none"><label class="h">Bank Details (for cancellation refund)</label>
         <div class="grid2">${field('Bank Name','n_bankName','')}${field('Account No','n_acctNo','')}</div>
@@ -1154,12 +1164,33 @@ function addNew(){
   if(typeSelEl&&typeSelEl.value===NEW_TYPE_OPT&&!g('n_typeNewInput').trim()){toast('Please type the new endorsement type name');return}
   const bankName=g('n_bankName').trim(),acctNo=g('n_acctNo').trim(),acctHolder=g('n_acctHolder').trim();
   const bank=bankName||acctNo||acctHolder?`${bankName} - ${acctNo} (${acctHolder})`:'';
-  const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
+  const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
     pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bank,followup:'',status:'new',submittedDate:'',
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
   CASES.push(c);save();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
   if(!c.driveUrl)autoCreateDriveFolder(c,{silent:true});
+}
+// Notification message for whoever processes the case — format fixed by Teoh 2026-07-31:
+// "Date : DD/MM/YYYY" (always today) then the endorsement type as a header, "1. PLATE | INSURER",
+// then Contact Number and Drive Link each on their own bullet line.
+function todayDDMMYYYY(){const d=new Date();return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();}
+function buildNotifyMessage({type,plate,ins,contact,driveUrl}){
+  return `Date : ${todayDDMMYYYY()}\n\n${type}\n1. ${plate} | ${ins||'-'}\n- ${contact||'-'}\n- ${driveUrl||'-'}`;
+}
+function copyNotifyMessageForNewCase(){
+  const g=id=>{const e=document.getElementById(id);return e?e.value:''};
+  const plate=g('n_plate').trim().toUpperCase();
+  if(!plate){toast('Please enter a vehicle number first');return}
+  const msg=buildNotifyMessage({
+    type:readTypeValue('n_type')||TYPE_LIST[0],
+    plate,
+    ins:readInsValue('n_ins'),
+    contact:g('n_contact').trim(),
+    driveUrl:g('n_driveUrl').trim()
+  });
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
+  navigator.clipboard.writeText(msg).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
 }
 
 // ============================================================
@@ -1204,8 +1235,8 @@ function viewNcdCalc(){
       <div class="ncd-card-header"><div class="ncd-icon">📅</div><h2>Policy Dates</h2></div>
       <div class="ncd-card-body">
         <div class="ncd-form-grid cols-3">
-          <div class="ncd-field"><label>Endorsement Start Date <span class="ncd-req">*</span></label><input type="date" id="ncdStartDate"><div class="ncd-hint">Today by default — editable</div></div>
-          <div class="ncd-field"><label>Policy Expiry Date <span class="ncd-req">*</span></label><input type="date" id="ncdExpiryDate"></div>
+          <div class="ncd-field"><label>Endorsement Start Date <span class="ncd-req">*</span></label><input type="date" id="ncdStartDate" lang="en-GB"><div class="ncd-hint">Today by default — editable</div></div>
+          <div class="ncd-field"><label>Policy Expiry Date <span class="ncd-req">*</span></label><input type="date" id="ncdExpiryDate" lang="en-GB"></div>
           <div class="ncd-field"><label>Remaining Days</label><input type="text" id="ncdRemainingDays" readonly placeholder="Auto-calculated" style="background:#f0f4f8;color:#374151;font-weight:600;"><div class="ncd-hint">Start date counts as Day 1</div></div>
         </div>
       </div>
