@@ -142,6 +142,9 @@ body{
 .cmain{flex:1;min-width:0}
 .cmain h3{font-size:16px;font-weight:660;color:var(--navy);display:inline}
 .type-pill{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;font-weight:600;background:rgba(44,74,115,.1);color:var(--navy)}
+.tnc-icon{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:var(--e-pendingdone-bg);color:var(--e-pendingdone);font-size:10px;font-weight:800;cursor:pointer;margin-left:6px;vertical-align:middle;flex-shrink:0}
+.tnc-icon:hover{background:var(--e-pendingdone);color:#fff}
+.notice-red{color:var(--e-followup);font-size:12.5px;font-weight:650;text-align:center;line-height:1.6;margin-bottom:14px;padding:2px 4px}
 .cmeta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
 .tag{font-size:11.5px;color:var(--ink-soft);background:rgba(255,255,255,.55);border:1px solid var(--line);border-radius:8px;padding:3px 9px;display:inline-flex;gap:5px;align-items:center}
 .tag b{color:var(--ink);font-weight:600}
@@ -877,6 +880,33 @@ function isFreshToday(c){return !!c.createdAt&&toISO(new Date(c.createdAt))===to
 // Still Pending Proceed 36+ hours after keying in, with no status change since — needs a red alert to stand out.
 function isStalePending(c){return c.status==='new'&&!!c.createdAt&&(Date.now()-c.createdAt)/36e5>=36}
 function statusBadge(status,urgent){const s=STATUS_CFG[status]||{l:status,ic:''};return `<span class="status-badge b-${status}${urgent?' b-urgent':''}">${urgent?'⏰ ':''}${s.ic} ${s.l}</span>`}
+// Terms & Conditions per endorsement type (Chinese + English) — shown via a ❗ icon next to the type on
+// every case card/row for types that have one on file. Hover previews it (native title tooltip, which
+// renders \n as line breaks); clicking copies both language versions to the clipboard.
+const TNC_TEXT={
+  'Policy Cancellation':{
+    zh:'Policy Cancellation需至少 2 个工作天完成, 保单取消完成后，退款将在 45 个工作天内处理完成',
+    en:'Policy cancellation will take at least 2 working days to complete. Once the cancellation is completed, the refund will be processed within 45 working days.'
+  },
+  'Ncd Withdrawal':{
+    zh:'NCD Withdrawal 需至少 2 个工作天完成\n\n*  如您确认办理，请至少提前 2 个工作天通知我们，以便我们安排相关处理。',
+    en:'NCD withdrawal will take at least 2 working days to complete.\n\n* Please inform us at least 2 working days in advance if you wish to proceed.'
+  }
+};
+function tncCopyText(type){
+  const t=TNC_TEXT[type];if(!t)return'';
+  return `${type} TNC\n\n中文：\n${t.zh}\n\nEnglish:\n${t.en}`;
+}
+function tncIcon(type){
+  if(!TNC_TEXT[type])return'';
+  const titleText=esc(tncCopyText(type)).replace(/"/g,'&quot;');
+  return `<span class="tnc-icon" title="${titleText}" onclick="event.stopPropagation();copyTnc('${type.replace(/'/g,"\\'")}')">❗</span>`;
+}
+function copyTnc(type){
+  const text=tncCopyText(type);if(!text)return;
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
+  navigator.clipboard.writeText(text).then(()=>toast('📋 TNC copied ('+type+')')).catch(()=>toast('Could not copy to clipboard'));
+}
 function caseCard(c){
   const bits=[];
   if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
@@ -891,7 +921,7 @@ function caseCard(c){
   const stale=isStalePending(c);
   return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="cmain">
-      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>
+      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}
       <div class="cmeta">${bits.join('')}</div>
       ${c.remark?`<div class="cdesc">${esc(c.remark)}</div>`:''}
       ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
@@ -934,7 +964,7 @@ function caseRow(c){
     <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</div>
     <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
-    <div class="tcell"><b>${esc(c.type)}</b></div>
+    <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}</div>
     <div class="tcell">${statusBadge(c.status,stale)}<div class="tdate">${dateLine}</div></div>
     <div class="tcell"><b>${amountText(c)}</b></div>
     <div class="tcell">${c.refund?money(c.refund):'—'}</div>
@@ -1139,6 +1169,7 @@ function renderNewSheet(){
   document.getElementById('sheetContent').innerHTML=`
     <div class="sheet-h"><div><h2>New Case</h2><div class="sub">Add a new endorsement enquiry</div></div><button class="x" onclick="closeSheet()">✕</button></div>
     <div class="sheet-b">
+      <div class="notice-red">所有Endorsement申请均需至少 2 个工作天处理完成。<br>All endorsement requests require at least 2 working days to be completed.</div>
       <div class="sect"><label class="h">Case details</label>
         <div class="grid2">${field('Vehicle Number','n_plate','')}${field('Contact Number','n_contact','','tel')}</div>
         <div class="grid2">${typeField('n_type','Policy Cancellation',true)}${insField('n_ins','')}</div>
