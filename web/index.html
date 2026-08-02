@@ -199,6 +199,8 @@ body{
 .fld-label-row label{margin:0}
 .copy-pic{border:0;background:rgba(61,90,130,.12);color:var(--navy);cursor:pointer;font:inherit;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:8px;transition:.15s;white-space:nowrap}
 .copy-pic:hover{background:rgba(61,90,130,.22)}
+.done-msg-icon{border:0;background:var(--e-done-bg);color:var(--e-done);cursor:pointer;font:inherit;font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:8px;transition:.15s;white-space:nowrap}
+.done-msg-icon:hover{background:var(--e-done);color:#fff}
 .fld input,.fld select,.fld textarea{width:100%;font:inherit;font-size:14px;color:var(--ink);background:rgba(255,255,255,.72);border:1px solid var(--line);border-radius:12px;padding:11px 13px;transition:.2s;outline:none}
 .fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--navy-soft);background:#fff;box-shadow:0 0 0 3.5px rgba(44,74,115,.16)}
 .date-hint{font-size:11px;color:var(--ink-faint);margin:4px 2px 0}
@@ -1160,7 +1162,10 @@ function renderSheet(){
         <div class="fld" id="f_refundDateWrap" style="display:${REFUND_TYPES.has(c.type)?'block':'none'}"><label>Refund Date</label><input id="f_refundDate" type="date" value="${c.refundDate||''}" oninput="const h=document.getElementById('f_refundDateHint');if(h)h.textContent=this.value?fmtLong(this.value):''"><div class="date-hint" id="f_refundDateHint">${c.refundDate?fmtLong(c.refundDate):''}</div></div>
       </div>
       <div class="sect"><label class="h">Status &amp; Tracking</label>
-        ${field('Status','f_status',STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'','select',STATUS_ORDER.map(k=>STATUS_CFG[k].l))}
+        <div class="fld">
+          <div class="fld-label-row"><label>Status</label><span class="done-msg-icon" id="doneMsgIcon" style="display:none" title="" onclick="copyDoneMessage()">💬 Copy Message</span></div>
+          <select id="f_status">${STATUS_ORDER.map(k=>`<option ${STATUS_CFG[k].l===(STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'')?'selected':''}>${STATUS_CFG[k].l}</option>`).join('')}</select>
+        </div>
         ${field('Submitted Date','f_submittedDate',c.submittedDate,'date')}
         <div class="grid2">
           ${field('Follow Up Date','f_followupDate',c.followupDate,'date')}
@@ -1190,6 +1195,7 @@ function renderSheet(){
     const wrap=document.getElementById('f_refundDateWrap');
     if(wrap)wrap.style.display=REFUND_TYPES.has(typeSel.value)?'block':'none';
     toggleEmailPicBtn('f_ins');
+    toggleDoneMsgIcon();
   });
   toggleEmailPicBtn('f_ins');
   // Auto-fills Submitted Date with today the moment Status is switched to "Submitted" — only if it's
@@ -1200,7 +1206,37 @@ function renderSheet(){
       const sd=document.getElementById('f_submittedDate');
       if(sd&&!sd.value){sd.value=toISO(new Date());sd.dispatchEvent(new Event('input'));}
     }
+    toggleDoneMsgIcon();
   });
+  const refundEl=document.getElementById('f_refund');
+  if(refundEl)refundEl.addEventListener('input',toggleDoneMsgIcon);
+  const plateEl=document.getElementById('f_plate');
+  if(plateEl)plateEl.addEventListener('input',toggleDoneMsgIcon);
+  toggleDoneMsgIcon();
+}
+// Policy Cancellation + Status "Done" shows a small copyable message next to the Status field — the
+// refund amount / plate always reflect whatever's currently typed in the form, not the last-saved values.
+function doneRefundMessage(plate,refund){
+  return `Good Day , ${plate} Policy cancellation done .\n\nRefund Amount: Rm ${(+refund||0).toFixed(2)}\n\nPlease Noted : \n\n1. Refunds will be processed within 45 working days. If you do not receive your refund after the stated period, please contact us for further assistance.`;
+}
+function currentDoneRefundMessage(){
+  const c=get(openId);if(!c)return'';
+  const plateEl=document.getElementById('f_plate'),refundEl=document.getElementById('f_refund');
+  const plate=(plateEl&&plateEl.value.trim())||c.plate;
+  const refund=refundEl?refundEl.value:c.refund;
+  return doneRefundMessage(plate,refund);
+}
+function toggleDoneMsgIcon(){
+  const icon=document.getElementById('doneMsgIcon');if(!icon)return;
+  const statusSel=document.getElementById('f_status'),typeSel=document.getElementById('f_type');
+  const show=!!statusSel&&statusSel.value===STATUS_CFG.done.l&&!!typeSel&&typeSel.value==='Policy Cancellation';
+  icon.style.display=show?'inline-flex':'none';
+  if(show)icon.title=currentDoneRefundMessage();
+}
+function copyDoneMessage(){
+  const text=currentDoneRefundMessage();if(!text)return;
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
+  navigator.clipboard.writeText(text).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
 }
 function toggleFollowupLog(){
   const wrap=document.getElementById('followupLogWrap');
