@@ -29,6 +29,9 @@
   --e-pendingpay:#5b62a6;--e-pendingpay-bg:rgba(91,98,166,.15);
   --e-pendingletter:#9a8255;--e-pendingletter-bg:rgba(173,148,98,.16);
   --e-pendingsigned:#7d6aa8;--e-pendingsigned-bg:rgba(125,106,168,.16);
+  --e-pendingdoc:#4a7a8c;--e-pendingdoc-bg:rgba(74,122,140,.16);
+  --e-onhold:#78716c;--e-onhold-bg:rgba(120,113,108,.15);
+  --e-cancelled:#a13a3a;--e-cancelled-bg:rgba(161,58,58,.15);
   --e-done:#5f8a5f;--e-done-bg:rgba(95,138,95,.16);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -137,6 +140,9 @@ body{
 .card.st-pendingpay{border-left-color:var(--e-pendingpay)}
 .card.st-pendingletter{border-left-color:var(--e-pendingletter)}
 .card.st-pendingsigned{border-left-color:var(--e-pendingsigned)}
+.card.st-pendingdoc{border-left-color:var(--e-pendingdoc)}
+.card.st-onhold{border-left-color:var(--e-onhold)}
+.card.st-cancelled{border-left-color:var(--e-cancelled);opacity:.7}
 .card.st-done{border-left-color:var(--e-done);opacity:.78}
 .card.stale-alert{border-left-color:var(--e-followup)!important;background:rgba(177,111,98,.07)}
 .cmain{flex:1;min-width:0}
@@ -158,6 +164,9 @@ body{
 .b-pendingpay{background:var(--e-pendingpay-bg);color:var(--e-pendingpay)}
 .b-pendingletter{background:var(--e-pendingletter-bg);color:var(--e-pendingletter)}
 .b-pendingsigned{background:var(--e-pendingsigned-bg);color:var(--e-pendingsigned)}
+.b-pendingdoc{background:var(--e-pendingdoc-bg);color:var(--e-pendingdoc)}
+.b-onhold{background:var(--e-onhold-bg);color:var(--e-onhold)}
+.b-cancelled{background:var(--e-cancelled-bg);color:var(--e-cancelled)}
 .b-done{background:var(--e-done-bg);color:var(--e-done)}
 .b-urgent{background:var(--e-followup-bg)!important;color:var(--e-followup)!important}
 .new-tag{display:inline-block;margin-left:6px;font-size:9.5px;font-weight:800;letter-spacing:.3px;color:#fff;background:var(--e-followup);padding:1.5px 6px;border-radius:7px;vertical-align:middle}
@@ -395,6 +404,7 @@ function addCustomType(name){
   CUSTOM_TYPES=CUSTOM_TYPES||[];CUSTOM_TYPES.push(name);
 }
 const PIC_LIST=['Moey','Teoh','Ang','Yue Sin','Seng','Shawn'];
+const FOLLOWUP_BY_OPTS=['WA','Email','Call'];
 const INSURER_LIST=['Liberty','Kurnia','Pacific','Allianz','Etiqa','MSIG','Zurich','Lonpac','Rhb','Generali']
   .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
 const INSURER_OTHER='Other';
@@ -432,18 +442,20 @@ function copyEmailPic(insId){
     .then(()=>toast('📋 Copied Email PIC for '+insSel.value))
     .catch(()=>toast('Could not copy to clipboard'));
 }
+// Full order confirmed with Teoh 2026-08-02: Pending Proceed → Pending Signed Form → Pending Document
+// → Pending Payment → Submitted → Follow Up → Done → Pending Endorsement Letter → Issue → On Hold → Cancel.
 const STATUS_CFG={
   new:{l:'Pending Proceed',ic:'🆕',order:0},
-  followup:{l:'Follow Up',ic:'🔴',order:1},
-  submitted:{l:'Submitted',ic:'📤',order:2},
-  pendingdone:{l:'Issue',ic:'⚠️',order:3},
-  pendingpay:{l:'Pending Payment',ic:'💳',order:4},
-  pendingletter:{l:'Pending Endorsement Letter',ic:'📝',order:5},
-  // Added 2026-07-31 — placed after Pending Endorsement Letter, before Done (waiting on the customer's
-  // signed form back before the case can close). Teoh said "push it live" before confirming full order
-  // for the other 3 statuses, so this placement is a best guess — flag if it should sit elsewhere.
-  pendingsigned:{l:'Pending Signed Form',ic:'✍️',order:6},
-  done:{l:'Done',ic:'✅',order:7}
+  pendingsigned:{l:'Pending Signed Form',ic:'✍️',order:1},
+  pendingdoc:{l:'Pending Document',ic:'📄',order:2},
+  pendingpay:{l:'Pending Payment',ic:'💳',order:3},
+  submitted:{l:'Submitted',ic:'📤',order:4},
+  followup:{l:'Follow Up',ic:'🔴',order:5},
+  done:{l:'Done',ic:'✅',order:6},
+  pendingletter:{l:'Pending Endorsement Letter',ic:'📝',order:7},
+  pendingdone:{l:'Issue',ic:'⚠️',order:8},
+  onhold:{l:'On Hold',ic:'⏸️',order:9},
+  cancelled:{l:'Cancel',ic:'🚫',order:10}
 };
 const STATUS_ORDER=Object.keys(STATUS_CFG);
 
@@ -560,7 +572,7 @@ async function boot(){
 // never auto-loaded into a real Supabase-backed session)
 // ============================================================
 function seed(){
-  const mk=o=>Object.assign({id:uid(),ins:'',pic:'Moey',contact:'',remark:'',bank:'',followup:'',status:'new',
+  const mk=o=>Object.assign({id:uid(),ins:'',pic:'Moey',contact:'',remark:'',bank:'',followup:'',followupDate:'',followupBy:'',status:'new',
     submittedDate:'',enquiryDate:toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:'',demo:true},o);
   return [
     mk({plate:'KBV668',type:'Ncd Withdrawal',ins:'Etiqa',pic:'Moey',status:'new',remark:'Not submitted yet',refund:2521.63}),
@@ -979,7 +991,7 @@ function viewDashboard(){
   const rows=filteredCases();
   const total=CASES.length;
   const needAttn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
-  const inProgress=CASES.filter(c=>['submitted','pendingdone','pendingpay','pendingletter','pendingsigned'].includes(c.status)).length;
+  const inProgress=CASES.filter(c=>['submitted','pendingdone','pendingpay','pendingletter','pendingsigned','pendingdoc'].includes(c.status)).length;
   const doneThisMonth=CASES.filter(c=>c.status==='done'&&isDoneThisMonth(c)).length;
   const counts={};STATUS_ORDER.forEach(k=>counts[k]=CASES.filter(c=>c.status===k).length);
 
@@ -1108,7 +1120,22 @@ function renderSheet(){
       <div class="sect"><label class="h">Status &amp; Tracking</label>
         ${field('Status','f_status',STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'','select',STATUS_ORDER.map(k=>STATUS_CFG[k].l))}
         ${field('Submitted Date','f_submittedDate',c.submittedDate,'date')}
-        ${field('Follow Up Note','f_followup',c.followup)}
+        <div class="grid2">
+          ${field('Follow Up Date','f_followupDate',c.followupDate,'date')}
+          <div class="fld">
+            <div class="fld-label-row"><label>Follow Up By</label><button type="button" class="copy-pic" onclick="toggleFollowupLog()">📝 Log</button></div>
+            <select id="f_followupBy">
+              <option value="" ${!c.followupBy?'selected':''}>—</option>
+              ${FOLLOWUP_BY_OPTS.map(o=>`<option ${c.followupBy===o?'selected':''}>${o}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="fld" id="followupLogWrap" style="display:none">
+          <label>Follow-up details (adds a dated entry to the note below)</label>
+          <textarea id="followupLogDetail" placeholder="What happened on this follow-up?"></textarea>
+          <button type="button" class="mini" style="margin-top:6px" onclick="addFollowupLogEntry()">➕ Add to Follow Up Note</button>
+        </div>
+        ${field('Follow Up Note','f_followup',c.followup,'textarea')}
       </div>
       <div class="sect"><label class="h">Bank Details (for refunds)</label>
         ${field('Bank / Account','f_bank',c.bank)}
@@ -1123,6 +1150,34 @@ function renderSheet(){
     toggleEmailPicBtn('f_ins');
   });
   toggleEmailPicBtn('f_ins');
+  // Auto-fills Submitted Date with today the moment Status is switched to "Submitted" — only if it's
+  // still blank, so it never clobbers a date someone already set deliberately.
+  const statusSel=document.getElementById('f_status');
+  if(statusSel)statusSel.addEventListener('change',()=>{
+    if(statusSel.value===STATUS_CFG.submitted.l){
+      const sd=document.getElementById('f_submittedDate');
+      if(sd&&!sd.value){sd.value=toISO(new Date());sd.dispatchEvent(new Event('input'));}
+    }
+  });
+}
+function toggleFollowupLog(){
+  const wrap=document.getElementById('followupLogWrap');
+  if(wrap)wrap.style.display=wrap.style.display==='none'?'block':'none';
+}
+// Appends a dated "DD Mon YYYY : Follow up by <channel>" entry (plus whatever detail was typed) onto the
+// existing Follow Up Note, building a running log instead of overwriting it each time.
+function addFollowupLogEntry(){
+  const by=document.getElementById('f_followupBy').value;
+  if(!by){toast('Please choose Follow Up By first');return}
+  const dateEl=document.getElementById('f_followupDate');
+  const date=dateEl.value||toISO(new Date());
+  if(!dateEl.value){dateEl.value=date;dateEl.dispatchEvent(new Event('input'));}
+  const detail=document.getElementById('followupLogDetail').value.trim();
+  const entry=`${fmtLong(date)} : Follow up by ${by}${detail?'\n'+detail:''}`;
+  const noteEl=document.getElementById('f_followup');
+  noteEl.value=(noteEl.value.trim()?noteEl.value.trim()+'\n\n':'')+entry;
+  document.getElementById('followupLogDetail').value='';
+  toast('Added to Follow Up Note');
 }
 function readSheet(){
   const c=get(openId);if(!c)return null;
@@ -1140,6 +1195,8 @@ function readSheet(){
   c.status=newStatus;
   c.submittedDate=g('f_submittedDate')||'';
   c.followup=g('f_followup')||'';
+  c.followupDate=g('f_followupDate')||'';
+  c.followupBy=g('f_followupBy')||'';
   c.bank=g('f_bank')||'';
   c.refund=+g('f_refund')||0;
   c.gross=+g('f_gross')||0;
@@ -1196,7 +1253,7 @@ function addNew(){
   const bankName=g('n_bankName').trim(),acctNo=g('n_acctNo').trim(),acctHolder=g('n_acctHolder').trim();
   const bank=bankName||acctNo||acctHolder?`${bankName} - ${acctNo} (${acctHolder})`:'';
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
-    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bank,followup:'',status:'new',submittedDate:'',
+    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bank,followup:'',followupDate:'',followupBy:'',status:'new',submittedDate:'',
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
   CASES.push(c);save();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
