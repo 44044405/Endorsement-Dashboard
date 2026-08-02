@@ -748,23 +748,64 @@ async function driveGetOrCreateFolder(token,name,parentId){
   const created=await driveCreateFolder(token,name,parentId);
   return created.id;
 }
+async function driveFileExistsInFolder(token,name,parentId){
+  const q=encodeURIComponent(`name='${name.replace(/'/g,"\\'")}' and '${parentId}' in parents and trashed=false`);
+  const res=await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`,{headers:{Authorization:'Bearer '+token}});
+  if(!res.ok)return false;
+  const data=await res.json();
+  return !!(data.files&&data.files.length);
+}
+async function driveCopyFile(token,fileId,newName,parentId){
+  const res=await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/copy?fields=id`,{
+    method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+    body:JSON.stringify({name:newName,parents:[parentId]})
+  });
+  if(!res.ok)throw new Error('Drive file copy failed ('+res.status+')');
+  return res.json();
+}
+// Master-copy Endorsement Form template per insurer, confirmed with Teoh 2026-08-02 (checked against
+// the real "NEW ENDORSEMENT FORM" Drive folder, not guessed from filenames alone). Kurnia shares
+// Liberty's file (same as the Email PIC pairing). Zurich deliberately left unmapped — 3 candidate files
+// exist there (general/takaful/combined) and Teoh hasn't picked one yet.
+const INSURER_FORM_FILE={
+  'Liberty':'1wBUcZsHW7XQAk65WdyaU95ETK80HNIf3',
+  'Allianz':'1rhLwVKu1Vv4QsVNL5NO2cHSlJgGaiel8',
+  'Pacific':'1YXQh39QeYxinJODmvpbMyabNHxIQ-9Wr',
+  'Etiqa':'1bRLwSF8YR42r2orEudCteKEJfXzetQE6',
+  'MSIG':'1Xyh5QWUn9IlN6f9r3oCw_n6G8aWm8LBl',
+  'Lonpac':'17iNNdnSJd18b_CIVMKDZmrWKPWmYiI_4',
+  'Rhb':'1WcOAwC5hlRJylEl6xvSiRHlZO43_2RBu',
+  'Generali':'1W-OIHW8KAP0srbEzn23vP_3CRyNHN1rQ',
+};
+INSURER_FORM_FILE['Kurnia']=INSURER_FORM_FILE['Liberty'];
 // Finds/creates the case's Drive folder and fills in driveUrl — runs in
 // the background (not awaited by the caller) so adding a case never
 // blocks on a Drive round-trip; silently no-ops if Drive isn't
 // connected, since driveUrl can always be filled in later via the
 // "Create Drive Folder" button in the case's detail sheet.
 // Shared by autoCreateDriveFolder (existing cases) and getDriveLinkForNewCase (still-being-drafted New Case form).
-async function resolveCaseDriveUrl(type,plate,enquiryDate,pic){
+// Also auto-copies that insurer's Endorsement Form template into the case folder, for every endorsement
+// type (not just Policy Cancellation) — skips insurers with no template on file (e.g. Zurich, for now),
+// and skips re-copying if a file with that name is already there (so repeat clicks don't duplicate it).
+async function resolveCaseDriveUrl(type,plate,enquiryDate,pic,ins){
   const token=await ensureDriveToken();
   const typeFolderName=TYPE_DRIVE_FOLDER[type]||type;
   const typeFolderId=await driveGetOrCreateFolder(token,typeFolderName,ENDORSEMENT_ROOT_ID);
   const caseFolderName=`${plate} ${enquiryDate?fmtLong(enquiryDate):fmtLong(toISO(new Date()))} ${pic||''}`.trim();
   const caseFolderId=await driveGetOrCreateFolder(token,caseFolderName,typeFolderId);
+  const formFileId=ins&&INSURER_FORM_FILE[ins];
+  if(formFileId){
+    const formName='Endorsement Form.pdf';
+    try{
+      const exists=await driveFileExistsInFolder(token,formName,caseFolderId);
+      if(!exists)await driveCopyFile(token,formFileId,formName,caseFolderId);
+    }catch(e){/* non-fatal — case folder still gets created/linked either way */}
+  }
   return `https://drive.google.com/drive/folders/${caseFolderId}`;
 }
 async function autoCreateDriveFolder(c,{silent}={}){
   try{
-    c.driveUrl=await resolveCaseDriveUrl(c.type,c.plate,c.enquiryDate,c.pic);
+    c.driveUrl=await resolveCaseDriveUrl(c.type,c.plate,c.enquiryDate,c.pic,c.ins);
     save();
     if(CURVIEW==='dashboard')render();
     if(openId===c.id)renderSheet();
@@ -786,7 +827,8 @@ async function getDriveLinkForNewCase(){
     const type=readTypeValue('n_type')||TYPE_LIST[0];
     const pic=g('n_pic')||PIC_LIST[0];
     const enquiryDate=g('n_enquiryDate')||toISO(new Date());
-    const url=await resolveCaseDriveUrl(type,plate,enquiryDate,pic);
+    const ins=readInsValue('n_ins');
+    const url=await resolveCaseDriveUrl(type,plate,enquiryDate,pic,ins);
     const urlInput=document.getElementById('n_driveUrl');if(urlInput)urlInput.value=url;
     // linkField() only renders the "Open ↗" link at initial render time, so patch it in directly here
     // rather than re-rendering the whole form (which would wipe out whatever the PIC has already typed).
