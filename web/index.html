@@ -405,7 +405,24 @@ function addCustomType(name){
   if(allTypes().some(m=>m.toLowerCase()===name.toLowerCase()))return;
   CUSTOM_TYPES=CUSTOM_TYPES||[];CUSTOM_TYPES.push(name);
 }
+// Normalizes a typed custom endorsement type to Title Case ("INSURANCE REFUND"/"insurance refund" ->
+// "Insurance Refund") regardless of how it was typed — this is the single source the name flows through
+// (dropdown display, CUSTOM_TYPES storage, and the Drive folder name for that type), so fixing it here
+// keeps all three in sync automatically.
+function toTitleCase(s){
+  return (s||'').trim().toLowerCase().replace(/\b\w/g,c=>c.toUpperCase());
+}
 const PIC_LIST=['Moey','Teoh','Ang','Yue Sin','Seng','Shawn'];
+// Seng and Yue Sin are the same person (goes by both names) — whichever they typed at login, default
+// the New Case PIC dropdown to the same PIC_LIST entry rather than treating them as different people.
+const PIC_NAME_ALIAS={'seng':'Yue Sin'};
+function defaultPicForLogin(){
+  const nm=(myName()||'').trim().toLowerCase();
+  if(!nm)return PIC_LIST[0];
+  if(PIC_NAME_ALIAS[nm])return PIC_NAME_ALIAS[nm];
+  const match=PIC_LIST.find(p=>p.toLowerCase()===nm);
+  return match||PIC_LIST[0];
+}
 const FOLLOWUP_BY_OPTS=['WA','Email','Call'];
 const INSURER_LIST=['Liberty','Kurnia','Pacific','Allianz','Etiqa','MSIG','Zurich','Lonpac','Rhb','Generali']
   .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
@@ -1115,7 +1132,7 @@ function readTypeValue(id){
   const sel=document.getElementById(id);if(!sel)return'';
   if(sel.value===NEW_TYPE_OPT){
     const input=document.getElementById(id+'NewInput');
-    const name=input?input.value.trim():'';
+    const name=input?toTitleCase(input.value):'';
     if(name)addCustomType(name);
     return name;
   }
@@ -1308,7 +1325,7 @@ function renderNewSheet(){
       <div class="sect"><label class="h">Case details</label>
         <div class="grid2">${field('Vehicle Number','n_plate','')}${field('Contact Number','n_contact','','tel')}</div>
         <div class="grid2">${typeField('n_type','Policy Cancellation',true)}${insField('n_ins','')}</div>
-        <div class="grid2">${field('PIC','n_pic',PIC_LIST[0],'select',PIC_LIST)}${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}</div>
+        <div class="grid2">${field('PIC','n_pic',defaultPicForLogin(),'select',PIC_LIST)}${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}</div>
         ${field('Remark','n_remark','','textarea')}
         ${linkField('Drive File Link','n_driveUrl','','<button type="button" class="copy-pic" id="n_getDriveBtn" onclick="getDriveLinkForNewCase()">🔗 Get Drive Link</button>')}
         <button type="button" class="mini" style="margin-top:8px" onclick="copyNotifyMessageForNewCase()">📋 Copy Notification Message</button>
@@ -1322,7 +1339,44 @@ function renderNewSheet(){
   const typeSel=document.getElementById('n_type');
   const toggleBank=()=>{document.getElementById('bankSection').style.display=(typeSel.value==='Policy Cancellation')?'block':'none';toggleEmailPicBtn('n_ins');};
   typeSel.addEventListener('change',toggleBank);toggleBank();
+  // Restoring a draft may change n_type/n_ins, which re-dispatches 'change' and re-runs toggleBank/
+  // toggleEmailPicBtn for us — see applyNewCaseDraft().
+  applyNewCaseDraft();
+  const sheetEl=document.getElementById('sheetContent');
+  sheetEl.addEventListener('input',saveNewCaseDraft);
+  sheetEl.addEventListener('change',saveNewCaseDraft);
 }
+// Keeps whatever's typed in the New Case form even if the sheet gets closed (✕ or accidental navigation)
+// before hitting "＋ Add case" — saved to localStorage (per-device, not synced) on every keystroke/change,
+// restored the next time "New Case" is opened, and cleared once the case is actually saved.
+const NEW_CASE_DRAFT_KEY='ed_new_case_draft';
+function saveNewCaseDraft(){
+  if(!document.getElementById('n_plate'))return;
+  const g=id=>{const e=document.getElementById(id);return e?e.value:''};
+  const draft={
+    plate:g('n_plate'),contact:g('n_contact'),type:g('n_type'),typeNew:g('n_typeNewInput'),
+    ins:g('n_ins'),insOther:g('n_insOtherInput'),pic:g('n_pic'),enquiryDate:g('n_enquiryDate'),
+    remark:g('n_remark'),driveUrl:g('n_driveUrl'),
+    bankName:g('n_bankName'),acctNo:g('n_acctNo'),acctHolder:g('n_acctHolder')
+  };
+  localStorage.setItem(NEW_CASE_DRAFT_KEY,JSON.stringify(draft));
+}
+function applyNewCaseDraft(){
+  let draft;try{draft=JSON.parse(localStorage.getItem(NEW_CASE_DRAFT_KEY)||'null');}catch(e){draft=null;}
+  if(!draft)return;
+  const set=(id,val)=>{const e=document.getElementById(id);if(e&&val){e.value=val;e.dispatchEvent(new Event('input'));}};
+  set('n_plate',draft.plate);set('n_contact',draft.contact);
+  set('n_pic',draft.pic);set('n_enquiryDate',draft.enquiryDate);set('n_remark',draft.remark);
+  set('n_driveUrl',draft.driveUrl);
+  set('n_bankName',draft.bankName);set('n_acctNo',draft.acctNo);set('n_acctHolder',draft.acctHolder);
+  const typeSel=document.getElementById('n_type');
+  if(typeSel&&draft.type){typeSel.value=draft.type;typeSel.dispatchEvent(new Event('change'));}
+  set('n_typeNewInput',draft.typeNew);
+  const insSel=document.getElementById('n_ins');
+  if(insSel&&draft.ins){insSel.value=draft.ins;insSel.dispatchEvent(new Event('change'));}
+  set('n_insOtherInput',draft.insOther);
+}
+function clearNewCaseDraft(){localStorage.removeItem(NEW_CASE_DRAFT_KEY);}
 function addNew(){
   const g=id=>{const e=document.getElementById(id);return e?e.value:''};
   if(!g('n_plate').trim()){toast('Please enter a vehicle number');return}
@@ -1333,7 +1387,7 @@ function addNew(){
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
     pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bank,followup:'',followupDate:'',followupBy:'',status:'new',submittedDate:'',
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
-  CASES.push(c);save();closeSheet();switchView('dashboard');toast('Added '+c.plate);
+  CASES.push(c);save();clearNewCaseDraft();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
   if(!c.driveUrl)autoCreateDriveFolder(c,{silent:true});
 }
