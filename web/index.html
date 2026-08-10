@@ -891,7 +891,7 @@ async function getDriveLinkForNewCase(){
 // Toast / view switching / render dispatch
 // ============================================================
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1900)}
-const TITLES={dashboard:['Dashboard','All endorsement cases'],pipeline:['Pipeline','Pending Proceed → Pending Document → Pending Payment → Follow Up'],ncdcalc:['NCD Withdrawal Calculator','Compute gross customer price & nett agent price'],settings:['Settings','Admin tools — activity log & user management']};
+const TITLES={dashboard:['Dashboard','All endorsement cases'],pipeline:['Pipeline','Pending Proceed → Pending Confirm → Pending Document → Pending Payment → Follow Up'],ncdcalc:['NCD Withdrawal Calculator','Compute gross customer price & nett agent price'],settings:['Settings','Admin tools — activity log & user management']};
 let CURVIEW='dashboard';
 function switchView(v){CURVIEW=v;document.querySelectorAll('.nav-i').forEach(b=>b.classList.toggle('on',b.dataset.v===v));render()}
 function render(){
@@ -1147,7 +1147,7 @@ function viewDashboard(){
 
 // Kanban-style view of the 4 stages Teoh watches day-to-day (requested 2026-08-10) — every other
 // status (Pending Confirm, Submitted, Done, etc.) still only shows on the Dashboard.
-const PIPELINE_STATUSES=['new','pendingdoc','pendingpay','followup'];
+const PIPELINE_STATUSES=['new','pendingconfirm','pendingdoc','pendingpay','followup'];
 // Stripped-down card for the Pipeline board — just plate/type/enquiry date, since the column already
 // says the status; click still opens the full detail sheet like everywhere else (Teoh 2026-08-10).
 function pipelineCard(c){
