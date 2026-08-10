@@ -59,7 +59,7 @@ body{
   backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);
   border-right:1px solid rgba(255,255,255,.1);box-shadow:6px 0 30px rgba(22,39,63,.16)}
 .sb-brand{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:4px 4px 16px}
-.sb-logo-img{width:100%;display:block;background:#fff;border-radius:12px;padding:12px 14px;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+.sb-logo-img{width:68%;display:block;margin:0 auto;background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 4px 12px rgba(0,0,0,.18)}
 .sb-cap{font-size:10px;font-weight:700;color:rgba(255,255,255,.55);text-align:center;letter-spacing:.6px;text-transform:uppercase}
 .nav-i{display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:13px;cursor:pointer;
   color:rgba(255,255,255,.72);font-size:13.5px;font-weight:540;transition:.2s;border:1px solid transparent}
@@ -150,7 +150,7 @@ body{
 .pipe-col-head{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .pipe-col-head .cnt{background:rgba(22,39,63,.08);border-radius:9px;padding:1px 8px;font-size:11px;color:var(--ink)}
 .pipe-col-body{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 250px);overflow-y:auto}
-.pipe-col-body .card{padding:12px 14px}
+.pipe-col-body .card.pipe-card-mini{padding:11px 14px}
 .pipe-empty{font-size:12px;color:var(--ink-faint);text-align:center;padding:24px 0}
 @media(max-width:900px){.pipe-col{flex-basis:82vw;min-width:82vw}}
 .cmain{flex:1;min-width:0}
@@ -1148,10 +1148,21 @@ function viewDashboard(){
 // Kanban-style view of the 4 stages Teoh watches day-to-day (requested 2026-08-10) — every other
 // status (Pending Confirm, Submitted, Done, etc.) still only shows on the Dashboard.
 const PIPELINE_STATUSES=['new','pendingdoc','pendingpay','followup'];
+// Stripped-down card for the Pipeline board — just plate/type/enquiry date, since the column already
+// says the status; click still opens the full detail sheet like everywhere else (Teoh 2026-08-10).
+function pipelineCard(c){
+  const stale=isStalePending(c);
+  return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''} pipe-card-mini" onclick="openDetail('${c.id}')">
+    <div class="cmain">
+      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3>
+      <div class="cmeta"><span class="tag">${esc(c.type)}</span><span class="tag">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}</span></div>
+    </div>
+  </div>`;
+}
 function viewPipeline(){
   const cols=PIPELINE_STATUSES.map(k=>{
     const list=CASES.filter(c=>c.status===k);
-    const cards=list.length?applyDSort(list).map(caseCard).join(''):`<div class="pipe-empty">No cases</div>`;
+    const cards=list.length?applyDSort(list).map(pipelineCard).join(''):`<div class="pipe-empty">No cases</div>`;
     return `<div class="pipe-col">
       <div class="pipe-col-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${list.length}</span></div>
       <div class="pipe-col-body">${cards}</div>
