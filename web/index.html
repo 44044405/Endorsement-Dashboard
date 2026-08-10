@@ -145,6 +145,14 @@ body{
 .card.st-cancelled{border-left-color:var(--e-cancelled);opacity:.7}
 .card.st-done{border-left-color:var(--e-done);opacity:.78}
 .card.stale-alert{border-left-color:var(--e-followup)!important;background:rgba(177,111,98,.07)}
+.pipe-board{display:flex;gap:14px;overflow-x:auto;padding-bottom:10px;align-items:flex-start}
+.pipe-col{flex:0 0 300px;min-width:300px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.35);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.pipe-col-head{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.pipe-col-head .cnt{background:rgba(22,39,63,.08);border-radius:9px;padding:1px 8px;font-size:11px;color:var(--ink)}
+.pipe-col-body{display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 250px);overflow-y:auto}
+.pipe-col-body .card{padding:12px 14px}
+.pipe-empty{font-size:12px;color:var(--ink-faint);text-align:center;padding:24px 0}
+@media(max-width:900px){.pipe-col{flex-basis:82vw;min-width:82vw}}
 .cmain{flex:1;min-width:0}
 .cmain h3{font-size:16px;font-weight:660;color:var(--navy);display:inline}
 .type-pill{display:inline-block;font-size:11px;padding:3px 10px;border-radius:20px;margin-left:8px;vertical-align:middle;font-weight:600;background:rgba(44,74,115,.1);color:var(--navy)}
@@ -343,6 +351,7 @@ input[type=file]{display:none}
   <nav class="sidebar">
     <div class="sb-brand"><img class="sb-logo-img" src="chinhock-logo.jpg" alt="Chin Hock Agency"><div class="sb-cap">Endorsement Dashboard</div></div>
     <div class="nav-i on" data-v="dashboard" onclick="switchView('dashboard')"><span class="ic">▦</span> Dashboard <span class="badge" id="attnBadge" style="display:none"></span></div>
+    <div class="nav-i" data-v="pipeline" onclick="switchView('pipeline')"><span class="ic">📋</span> Pipeline</div>
     <div class="nav-i" data-v="ncdcalc" onclick="switchView('ncdcalc')"><span class="ic">🧮</span> NCD Calculator</div>
     <div class="nav-i" data-v="settings" onclick="switchView('settings')"><span class="ic">⚙️</span> Settings</div>
     <button class="sb-new" onclick="openNew()">＋ New Case</button>
@@ -882,7 +891,7 @@ async function getDriveLinkForNewCase(){
 // Toast / view switching / render dispatch
 // ============================================================
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),1900)}
-const TITLES={dashboard:['Dashboard','All endorsement cases'],ncdcalc:['NCD Withdrawal Calculator','Compute gross customer price & nett agent price'],settings:['Settings','Admin tools — activity log & user management']};
+const TITLES={dashboard:['Dashboard','All endorsement cases'],pipeline:['Pipeline','Pending Proceed → Pending Document → Pending Payment → Follow Up'],ncdcalc:['NCD Withdrawal Calculator','Compute gross customer price & nett agent price'],settings:['Settings','Admin tools — activity log & user management']};
 let CURVIEW='dashboard';
 function switchView(v){CURVIEW=v;document.querySelectorAll('.nav-i').forEach(b=>b.classList.toggle('on',b.dataset.v===v));render()}
 function render(){
@@ -892,7 +901,7 @@ function render(){
   const attn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
   const b=document.getElementById('attnBadge');b.style.display=attn?'inline-block':'none';b.textContent=attn;
   renderDemoBanner();
-  document.getElementById('view').innerHTML=CURVIEW==='settings'?viewSettings():CURVIEW==='ncdcalc'?viewNcdCalc():viewDashboard();
+  document.getElementById('view').innerHTML=CURVIEW==='settings'?viewSettings():CURVIEW==='ncdcalc'?viewNcdCalc():CURVIEW==='pipeline'?viewPipeline():viewDashboard();
   if(CURVIEW==='ncdcalc')NcdCalc.init();
   if(CURVIEW==='settings')updateDriveStatusUI();
 }
@@ -1134,6 +1143,21 @@ function viewDashboard(){
   }
 
   return metrics+filters+tabs+body;
+}
+
+// Kanban-style view of the 4 stages Teoh watches day-to-day (requested 2026-08-10) — every other
+// status (Pending Confirm, Submitted, Done, etc.) still only shows on the Dashboard.
+const PIPELINE_STATUSES=['new','pendingdoc','pendingpay','followup'];
+function viewPipeline(){
+  const cols=PIPELINE_STATUSES.map(k=>{
+    const list=CASES.filter(c=>c.status===k);
+    const cards=list.length?applyDSort(list).map(caseCard).join(''):`<div class="pipe-empty">No cases</div>`;
+    return `<div class="pipe-col">
+      <div class="pipe-col-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${list.length}</span></div>
+      <div class="pipe-col-body">${cards}</div>
+    </div>`;
+  }).join('');
+  return `<div class="pipe-board">${cols}</div>`;
 }
 
 // ============================================================
