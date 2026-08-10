@@ -993,9 +993,7 @@ function copyTnc(type){
 // NCD Withdrawal card icon — copies a fixed-format start message using today's date and the case's
 // Gross amount, requested by Teoh 2026-08-10.
 function ncdStartMessage(c){
-  const d=new Date();
-  const dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0');
-  return `${c.plate} Ncd Withdrawal start from today (${dd} ${mm} ${d.getFullYear()}) : Rm${(+c.gross||0).toFixed(2)}`;
+  return `${c.plate} Ncd Withdrawal start from today (${fmtLong(toISO(new Date()))}) : Rm${(+c.gross||0).toFixed(2)}`;
 }
 function ncdStartIcon(c){
   if(c.type!=='Ncd Withdrawal')return'';
