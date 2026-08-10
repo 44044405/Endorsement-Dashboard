@@ -461,20 +461,21 @@ function copyEmailPic(insId){
     .then(()=>toast('📋 Copied Email PIC for '+insSel.value))
     .catch(()=>toast('Could not copy to clipboard'));
 }
-// Full order confirmed with Teoh 2026-08-02: Pending Proceed → Pending Signed Form → Pending Document
-// → Pending Payment → Submitted → Follow Up → Done → Pending Endorsement Letter → Issue → On Hold → Cancel.
+// Full order confirmed with Teoh 2026-08-02: Pending Proceed → Pending Confirm → Pending Signed Form →
+// Pending Document → Pending Payment → Submitted → Follow Up → Done → Pending Endorsement Letter → Issue → On Hold → Cancel.
 const STATUS_CFG={
   new:{l:'Pending Proceed',ic:'🆕',order:0},
-  pendingsigned:{l:'Pending Signed Form',ic:'✍️',order:1},
-  pendingdoc:{l:'Pending Document',ic:'📄',order:2},
-  pendingpay:{l:'Pending Payment',ic:'💳',order:3},
-  submitted:{l:'Submitted',ic:'📤',order:4},
-  followup:{l:'Follow Up',ic:'🔴',order:5},
-  done:{l:'Done',ic:'✅',order:6},
-  pendingletter:{l:'Pending Endorsement Letter',ic:'📝',order:7},
-  pendingdone:{l:'Issue',ic:'⚠️',order:8},
-  onhold:{l:'On Hold',ic:'⏸️',order:9},
-  cancelled:{l:'Cancel',ic:'🚫',order:10}
+  pendingconfirm:{l:'Pending Confirm',ic:'❓',order:1},
+  pendingsigned:{l:'Pending Signed Form',ic:'✍️',order:2},
+  pendingdoc:{l:'Pending Document',ic:'📄',order:3},
+  pendingpay:{l:'Pending Payment',ic:'💳',order:4},
+  submitted:{l:'Submitted',ic:'📤',order:5},
+  followup:{l:'Follow Up',ic:'🔴',order:6},
+  done:{l:'Done',ic:'✅',order:7},
+  pendingletter:{l:'Pending Endorsement Letter',ic:'📝',order:8},
+  pendingdone:{l:'Issue',ic:'⚠️',order:9},
+  onhold:{l:'On Hold',ic:'⏸️',order:10},
+  cancelled:{l:'Cancel',ic:'🚫',order:11}
 };
 const STATUS_ORDER=Object.keys(STATUS_CFG);
 
@@ -489,6 +490,15 @@ function nowStamp(){const d=new Date();return d.getDate()+'/'+(d.getMonth()+1)+'
 function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,5)}
 function money(n){return 'RM'+(+n||0).toFixed(2)}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+// Bank Details used to be one combined string ("BankName - AcctNo (Holder)"). Cases created before
+// 2026-08-10 only have that in c.bank — split it back into the 3 columns Teoh asked for so old data
+// still shows up when a case is opened, without a separate DB migration.
+function bankParts(c){
+  if(c.bankHolder||c.bankName||c.bankAcctNo)return{bankHolder:c.bankHolder||'',bankName:c.bankName||'',bankAcctNo:c.bankAcctNo||''};
+  const m=c.bank&&/^(.*) - (.*) \((.*)\)$/.exec(c.bank);
+  if(m)return{bankName:m[1],bankAcctNo:m[2],bankHolder:m[3]};
+  return{bankHolder:'',bankName:c.bank||'',bankAcctNo:''};
+}
 
 // ============================================================
 // Shared data layer (Supabase) — single-row JSON blob + rev-based
@@ -980,6 +990,23 @@ function copyTnc(type){
   if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
   navigator.clipboard.writeText(text).then(()=>toast('📋 TNC copied ('+type+')')).catch(()=>toast('Could not copy to clipboard'));
 }
+// NCD Withdrawal card icon — copies a fixed-format start message using today's date and the case's
+// Gross amount, requested by Teoh 2026-08-10.
+function ncdStartMessage(c){
+  const d=new Date();
+  const dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0');
+  return `${c.plate} Ncd Withdrawal start from today (${dd} ${mm} ${d.getFullYear()}) : Rm${(+c.gross||0).toFixed(2)}`;
+}
+function ncdStartIcon(c){
+  if(c.type!=='Ncd Withdrawal')return'';
+  return `<span class="tnc-icon" title="Copy start message" onclick="event.stopPropagation();copyNcdStartMessage('${c.id}')">📋</span>`;
+}
+function copyNcdStartMessage(id){
+  const c=get(id);if(!c)return;
+  const text=ncdStartMessage(c);
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
+  navigator.clipboard.writeText(text).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
+}
 function caseCard(c){
   const bits=[];
   if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
@@ -994,7 +1021,7 @@ function caseCard(c){
   const stale=isStalePending(c);
   return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="cmain">
-      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}
+      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}${ncdStartIcon(c)}
       <div class="cmeta">${bits.join('')}</div>
       ${c.remark?`<div class="cdesc">${esc(c.remark)}</div>`:''}
       ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
@@ -1037,7 +1064,7 @@ function caseRow(c){
     <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</div>
     <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
-    <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}</div>
+    <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}${ncdStartIcon(c)}</div>
     <div class="tcell">${statusBadge(c.status,stale)}<div class="tdate">${dateLine}</div></div>
     <div class="tcell"><b>${amountText(c)}</b></div>
     <div class="tcell">${c.refund?money(c.refund):'—'}</div>
@@ -1164,6 +1191,7 @@ function closeSheet(){document.getElementById('scrim').classList.remove('show');
 function openDetail(id){openId=id;renderSheet();showSheet()}
 function renderSheet(){
   const c=get(openId);if(!c)return;
+  const bp=bankParts(c);
   document.getElementById('sheetContent').innerHTML=`
     <div class="sheet-h"><div><h2>${esc(c.plate)}</h2><div class="sub">${esc(c.type)} · ${esc(c.ins||'—')}</div></div>
       <div class="sheet-h-actions"><button class="hsave" onclick="saveSheet()">💾 Save</button><button class="x" onclick="closeSheet()">✕</button></div></div>
@@ -1202,7 +1230,7 @@ function renderSheet(){
         ${field('Follow Up Note','f_followup',c.followup,'textarea')}
       </div>
       <div class="sect"><label class="h">Bank Details (for refunds)</label>
-        ${field('Bank / Account','f_bank',c.bank)}
+        <div class="grid3">${field('Bank Holder Name','f_bankHolder',bp.bankHolder)}${field('Bank Name','f_bankName',bp.bankName)}${field('Bank Account Number','f_bankAcctNo',bp.bankAcctNo)}</div>
       </div>
       <div class="sect">${linkField('Drive Link','f_driveUrl',c.driveUrl)}${!c.driveUrl?`<button class="mini" onclick="autoCreateDriveFolder(get('${c.id}'))">📁 Create Drive Folder</button>`:''}</div>
       ${isAdmin()?`<button class="bigbtn danger" onclick="delRecord('${c.id}')">🗑️ Delete this case</button>`:''}
@@ -1292,7 +1320,9 @@ function readSheet(){
   c.followup=g('f_followup')||'';
   c.followupDate=g('f_followupDate')||'';
   c.followupBy=g('f_followupBy')||'';
-  c.bank=g('f_bank')||'';
+  c.bankHolder=g('f_bankHolder')||'';
+  c.bankName=g('f_bankName')||'';
+  c.bankAcctNo=g('f_bankAcctNo')||'';
   c.refund=+g('f_refund')||0;
   c.gross=+g('f_gross')||0;
   c.nett=+g('f_nett')||0;
@@ -1331,8 +1361,7 @@ function renderNewSheet(){
         <button type="button" class="mini" style="margin-top:8px" onclick="copyNotifyMessageForNewCase()">📋 Copy Notification Message</button>
       </div>
       <div class="sect" id="bankSection" style="display:none"><label class="h">Bank Details (for cancellation refund)</label>
-        <div class="grid2">${field('Bank Name','n_bankName','')}${field('Account No','n_acctNo','')}</div>
-        ${field('Account Holder Name','n_acctHolder','')}
+        <div class="grid3">${field('Bank Holder Name','n_bankHolder','')}${field('Bank Name','n_bankName','')}${field('Bank Account Number','n_bankAcctNo','')}</div>
       </div>
       <button class="bigbtn" onclick="addNew()">＋ Add case</button>
     </div>`;
@@ -1357,7 +1386,7 @@ function saveNewCaseDraft(){
     plate:g('n_plate'),contact:g('n_contact'),type:g('n_type'),typeNew:g('n_typeNewInput'),
     ins:g('n_ins'),insOther:g('n_insOtherInput'),pic:g('n_pic'),enquiryDate:g('n_enquiryDate'),
     remark:g('n_remark'),driveUrl:g('n_driveUrl'),
-    bankName:g('n_bankName'),acctNo:g('n_acctNo'),acctHolder:g('n_acctHolder')
+    bankHolder:g('n_bankHolder'),bankName:g('n_bankName'),bankAcctNo:g('n_bankAcctNo')
   };
   localStorage.setItem(NEW_CASE_DRAFT_KEY,JSON.stringify(draft));
 }
@@ -1368,7 +1397,7 @@ function applyNewCaseDraft(){
   set('n_plate',draft.plate);set('n_contact',draft.contact);
   set('n_pic',draft.pic);set('n_enquiryDate',draft.enquiryDate);set('n_remark',draft.remark);
   set('n_driveUrl',draft.driveUrl);
-  set('n_bankName',draft.bankName);set('n_acctNo',draft.acctNo);set('n_acctHolder',draft.acctHolder);
+  set('n_bankHolder',draft.bankHolder);set('n_bankName',draft.bankName);set('n_bankAcctNo',draft.bankAcctNo);
   const typeSel=document.getElementById('n_type');
   if(typeSel&&draft.type){typeSel.value=draft.type;typeSel.dispatchEvent(new Event('change'));}
   set('n_typeNewInput',draft.typeNew);
@@ -1382,10 +1411,9 @@ function addNew(){
   if(!g('n_plate').trim()){toast('Please enter a vehicle number');return}
   const typeSelEl=document.getElementById('n_type');
   if(typeSelEl&&typeSelEl.value===NEW_TYPE_OPT&&!g('n_typeNewInput').trim()){toast('Please type the new endorsement type name');return}
-  const bankName=g('n_bankName').trim(),acctNo=g('n_acctNo').trim(),acctHolder=g('n_acctHolder').trim();
-  const bank=bankName||acctNo||acctHolder?`${bankName} - ${acctNo} (${acctHolder})`:'';
+  const bankHolder=g('n_bankHolder').trim(),bankName=g('n_bankName').trim(),bankAcctNo=g('n_bankAcctNo').trim();
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
-    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bank,followup:'',followupDate:'',followupBy:'',status:'new',submittedDate:'',
+    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bankHolder,bankName,bankAcctNo,followup:'',followupDate:'',followupBy:'',status:'new',submittedDate:'',
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
   CASES.push(c);save();clearNewCaseDraft();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
