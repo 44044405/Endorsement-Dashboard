@@ -1013,7 +1013,7 @@ function caseCard(c){
   if(c.pic)bits.push(`<span class="tag">👤 <b>${esc(c.pic)}</b></span>`);
   if(c.contact)bits.push(`<span class="tag">📞 ${esc(c.contact)}</span>`);
   bits.push(`<span class="tag">${c.submittedDate?'Submitted '+fmtLong(c.submittedDate):'Not submitted'}</span>`);
-  if(c.gross||c.nett)bits.push(`<span class="tag">💰 ${c.gross?('Gross '+money(c.gross)):''}${c.gross&&c.nett?' / ':''}${c.nett?('Nett '+money(c.nett)):''}</span>`);
+  if(c.gross||c.nett||c.type==='Ncd Withdrawal')bits.push(`<span class="tag">💰 ${c.gross?('Gross '+money(c.gross)):''}${c.gross&&c.nett?' / ':''}${c.nett?('Nett '+money(c.nett)):''}${ncdStartIcon(c)}</span>`);
   if(c.refund)bits.push(`<span class="tag">Refund ${money(c.refund)}</span>`);
   if(c.refundDate)bits.push(`<span class="tag">📅 Refund Date ${fmtLong(c.refundDate)}</span>`);
   else if(REFUND_TYPES.has(c.type))bits.push(`<span class="tag" style="color:var(--e-followup);font-weight:600">⏳ Refund Pending</span>`);
@@ -1021,7 +1021,7 @@ function caseCard(c){
   const stale=isStalePending(c);
   return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="cmain">
-      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}${ncdStartIcon(c)}
+      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}
       <div class="cmeta">${bits.join('')}</div>
       ${c.remark?`<div class="cdesc">${esc(c.remark)}</div>`:''}
       ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
@@ -1064,9 +1064,9 @@ function caseRow(c){
     <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</div>
     <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
-    <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}${ncdStartIcon(c)}</div>
+    <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}</div>
     <div class="tcell">${statusBadge(c.status,stale)}<div class="tdate">${dateLine}</div></div>
-    <div class="tcell"><b>${amountText(c)}</b></div>
+    <div class="tcell"><b>${amountText(c)}</b>${ncdStartIcon(c)}</div>
     <div class="tcell">${c.refund?money(c.refund):'—'}</div>
     <div class="tcell">${refundDateText(c)}</div>
   </div>`;
