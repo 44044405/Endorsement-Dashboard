@@ -1007,6 +1007,17 @@ function copyNcdStartMessage(id){
   if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
   navigator.clipboard.writeText(text).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
 }
+// Same message, but from the case detail sheet's "Amounts" section — reads whatever's currently
+// typed in Plate/Gross (not the last-saved values), same live-read pattern as currentDoneRefundMessage().
+function copyNcdStartMessageFromForm(){
+  const c=get(openId);if(!c)return;
+  const plateEl=document.getElementById('f_plate'),grossEl=document.getElementById('f_gross');
+  const plate=(plateEl&&plateEl.value.trim())||c.plate;
+  const gross=grossEl?grossEl.value:c.gross;
+  const text=ncdStartMessage({plate,gross});
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
+  navigator.clipboard.writeText(text).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
+}
 function caseCard(c){
   const bits=[];
   if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
@@ -1202,7 +1213,7 @@ function renderSheet(){
         <div class="grid2">${field('PIC','f_pic',c.pic,'select',PIC_LIST)}${field('Enquiry Date','f_enquiryDate',c.enquiryDate,'date')}</div>
         ${field('Remark','f_remark',c.remark,'textarea')}
       </div>
-      <div class="sect"><label class="h">Amounts</label>
+      <div class="sect"><label class="h" style="display:flex;align-items:center;justify-content:space-between">Amounts${c.type==='Ncd Withdrawal'?`<span class="done-msg-icon" onclick="copyNcdStartMessageFromForm()">📋 Copy Message</span>`:''}</label>
         <div class="grid3">${field('Gross (RM)','f_gross',c.gross,'number')}${field('Nett (RM)','f_nett',c.nett,'number')}${field('Refund (RM)','f_refund',c.refund,'number')}</div>
         <div class="fld" id="f_refundDateWrap" style="display:${REFUND_TYPES.has(c.type)?'block':'none'}"><label>Refund Date</label><input id="f_refundDate" type="date" value="${c.refundDate||''}" oninput="const h=document.getElementById('f_refundDateHint');if(h)h.textContent=this.value?fmtLong(this.value):''"><div class="date-hint" id="f_refundDateHint">${c.refundDate?fmtLong(c.refundDate):''}</div></div>
       </div>
