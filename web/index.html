@@ -451,6 +451,29 @@ const EMAIL_PIC={
   'MSIG':{to:['aunnee_choong@my.msig-asia.com'],cc:[]},
 };
 EMAIL_PIC['Kurnia']=EMAIL_PIC['Liberty'];
+// Cancellation REQUEST email PIC — who to email to ask an insurer to process a cancellation, as
+// opposed to EMAIL_PIC above (who to chase for the refund afterwards — different contacts, e.g.
+// Liberty's refund PIC is libmotorefund@... but this list's Liberty is ncdlib@..., since Liberty
+// cancellations go through NCD Withdrawal instead). Sourced from Teoh 2026-08-10, own fixed list
+// of 6 insurers — not the same as INSURER_LIST used for case tracking (10 insurers, e.g. "Pacific"
+// not "Pacific Insurance") — see CANCEL_PIC_INS_ALIAS below for the name mapping between the two.
+const CANCEL_PIC={
+  signature_block:'Team Chin Hock Agency (M) Sdn Bhd\nTel : Ms Teoh :010-538-4405 / Careline: 012-972-4405',
+  insurers:{
+    'Etiqa':{to:['rozawati.r@etiqa.com.my','aliahanis.hanis@etiqa.com.my','tzichi.soon@etiqa.com.my'],cc:['chinhockagency@hotmail.com'],cc_optional_urgent:['account@chinhockagency.com','angyy@chinhockagency.com'],subject_template:'POLICY CANCELLATION | {ref}',body_template:'Dear Team\nKindly assist with the cancellation. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the cancellation has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Lonpac':{to:['pakialetchumy@lonpac.com','hhlee@lonpac.com','ghyeoh@lonpac.com','stephennieooi@lonpac.com'],cc:['chinhockagency@hotmail.com'],cc_optional_urgent:[],subject_template:'POLICY CANCELLATION | {ref}',body_template:'Dear Team\nKindly assist with the cancellation. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the cancellation has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Generali':{to:['ezan.rahim@generali.com.my','brenda.fang@generali.com.my'],to_optional_claim_linked:['iching.chee@generali.com.my'],cc:['chinhockagency@hotmail.com','account@chinhockagency.com'],cc_optional_urgent:[],subject_template:'POLICY CANCELLATION | {ref}',body_template:'Dear Team\nKindly assist with the cancellation. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the cancellation has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Pacific Insurance':{to:['nirmala.govinda@pacificinsurance.com.my','desmondsim@pacificinsurance.com.my','jullee@pacificinsurance.com.my'],cc:['chinhockagency@hotmail.com'],cc_optional_urgent:[],subject_template:'POLICY CANCELLATION | {ref}',body_template:'Dear Team\nKindly assist with the cancellation. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the cancellation has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Allianz':{to:['khiron.bee@allianz.com.my','khaldun.ahmad@allianz.com.my','Eunice.Chung@allianz.com.my','Sajita.Manimohan@allianz.com.my'],cc:['zulkifli.shoib@allianz.com.my','chinhockagency@hotmail.com'],cc_optional_urgent:[],subject_template:'POLICY CANCELLATION | {ref}',body_template:'Dear Team\nKindly assist with the cancellation. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the cancellation has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Liberty':{note:'Cancellations for Liberty are typically requested via NCD WITHDRAWAL, which precedes/accompanies the policy cancellation.',to:['ncdlib@libertyinsurance.com.my'],cc:['junie.goh@libertyinsurance.com.my','tan-yong-yen@libertyinsurance.com.my','chinhockagency@hotmail.com'],cc_optional_urgent:['account@chinhockagency.com'],subject_template:'NCD WITHDRAWAL | {ref}',body_template:'Dear Team\nKindly assist. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the NCD withdrawal has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'}
+  }
+};
+const CANCEL_PIC_INS_ALIAS={'Pacific':'Pacific Insurance'};
+function guessCancelInsurer(ins){
+  if(!ins)return'';
+  const mapped=CANCEL_PIC_INS_ALIAS[ins]||ins;
+  return Object.keys(CANCEL_PIC.insurers).find(k=>k.toLowerCase()===mapped.toLowerCase())||'';
+}
 function toggleEmailPicBtn(insId){
   const typeId=insId==='n_ins'?'n_type':insId==='f_ins'?'f_type':null;
   const typeSel=typeId&&document.getElementById(typeId);
@@ -1025,6 +1048,98 @@ function copyNcdStartMessageFromForm(){
   if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
   navigator.clipboard.writeText(text).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
 }
+// ============================================================
+// Cancellation Request Email — per-card generator (Teoh 2026-08-10)
+// ============================================================
+function cancelEmailIcon(c){
+  if(c.type!=='Policy Cancellation')return'';
+  return `<span class="tnc-icon" title="Cancellation Request Email" onclick="event.stopPropagation();openCancelEmail('${c.id}')">✉️</span>`;
+}
+function onCancelInsurerChange(){
+  const ins=document.getElementById('ce_ins').value;
+  const data=CANCEL_PIC.insurers[ins];
+  const claimWrap=document.getElementById('ce_claimWrap');
+  if(claimWrap)claimWrap.style.display=(data&&data.to_optional_claim_linked)?'flex':'none';
+  const noteEl=document.getElementById('ce_note');
+  if(noteEl){
+    if(data&&data.note){noteEl.style.display='block';noteEl.textContent=data.note;}
+    else{noteEl.style.display='none';noteEl.textContent='';}
+  }
+}
+function openCancelEmail(id){
+  const c=get(id);if(!c)return;
+  const insurerNames=Object.keys(CANCEL_PIC.insurers).sort((a,b)=>a.localeCompare(b));
+  const guessed=guessCancelInsurer(c.ins);
+  document.getElementById('sheetContent').innerHTML=`
+    <div class="sheet-h"><div><h2>Cancellation Request Email</h2><div class="sub">${esc(c.plate)}${c.ins?' · '+esc(c.ins):''}</div></div><button class="x" onclick="closeSheet()">✕</button></div>
+    <div class="sheet-b">
+      <div class="sect"><label class="h">Details</label>
+        <div class="grid2">
+          <div class="fld"><label>Insurance Company</label><select id="ce_ins" onchange="onCancelInsurerChange()">
+            <option value="" ${guessed?'':'selected'}>— Select —</option>
+            ${insurerNames.map(n=>`<option ${n===guessed?'selected':''}>${esc(n)}</option>`).join('')}
+          </select></div>
+          <div class="fld"><label>Policy / Vehicle No.</label><input id="ce_ref" type="text" value="${esc(c.plate)}"></div>
+        </div>
+        <div class="fld"><label>Drive Link (optional — added to email body instead of an attachment)</label><input id="ce_drive" type="text" value="${esc(c.driveUrl||'')}" placeholder="paste link…"></div>
+        <div class="grid2">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ce_urgent"> Urgent case</label>
+          <label id="ce_claimWrap" style="display:none;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ce_claim"> Linked to a claim</label>
+        </div>
+        <div class="fld"><label>Message Type</label><select id="ce_kind"><option value="initial">Initial request</option><option value="followup">Follow-up / Chase</option></select></div>
+        <div class="notice-red" id="ce_note" style="display:none"></div>
+        <button class="bigbtn" onclick="generateCancelEmail()">✉️ Generate</button>
+      </div>
+      <div id="ce_result"></div>
+    </div>`;
+  onCancelInsurerChange();
+  showSheet();
+}
+function ceField(label,id,val,big){
+  return `<div class="fld"><div class="fld-label-row"><label>${label}</label><button type="button" class="copy-pic" onclick="copyCeField('${id}')">📋 Copy</button></div>${big?`<textarea id="${id}" style="min-height:120px">${esc(val)}</textarea>`:`<input id="${id}" type="text" value="${esc(val)}">`}</div>`;
+}
+function copyCeField(id){
+  const el=document.getElementById(id);if(!el)return;
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
+  navigator.clipboard.writeText(el.value).then(()=>toast('📋 Copied')).catch(()=>toast('Could not copy to clipboard'));
+}
+function generateCancelEmail(){
+  const ins=document.getElementById('ce_ins').value;
+  const data=CANCEL_PIC.insurers[ins];
+  if(!data){toast('Please select an insurance company');return}
+  const ref=document.getElementById('ce_ref').value.trim();
+  if(!ref){toast('Please enter the Policy / Vehicle No.');return}
+  const urgent=document.getElementById('ce_urgent').checked;
+  const claimEl=document.getElementById('ce_claim');
+  const claim=!!(claimEl&&claimEl.checked);
+  const kind=document.getElementById('ce_kind').value;
+  const drive=document.getElementById('ce_drive').value.trim();
+
+  const to=[...data.to,...(claim&&data.to_optional_claim_linked?data.to_optional_claim_linked:[])];
+  const cc=[...new Set([...data.cc,...(urgent?(data.cc_optional_urgent||[]):[])])];
+  const subject=data.subject_template.replace('{ref}',ref);
+  const bodyTemplate=kind==='followup'?(data.followup_body_template||data.body_template):data.body_template;
+  let body=bodyTemplate;
+  if(drive)body=body.replace('{signature}',`Related documents: ${drive}\n\n{signature}`);
+  body=body.replace('{signature}',CANCEL_PIC.signature_block);
+
+  document.getElementById('ce_result').innerHTML=`
+    <div class="sect"><label class="h">Generated Email</label>
+      ${ceField('TO','ce_to',to.join(', '))}
+      ${ceField('CC','ce_cc',cc.join(', '))}
+      ${ceField('Subject','ce_subject',subject)}
+      ${ceField('Body','ce_body',body,true)}
+      <button class="bigbtn" onclick="openCancelEmailInGmail()">📧 Open in Gmail</button>
+    </div>`;
+}
+function openCancelEmailInGmail(){
+  const to=document.getElementById('ce_to').value;
+  const cc=document.getElementById('ce_cc').value;
+  const subject=document.getElementById('ce_subject').value;
+  const body=document.getElementById('ce_body').value;
+  const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&cc=${encodeURIComponent(cc)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  window.open(url,'_blank');
+}
 function caseCard(c){
   const bits=[];
   if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
@@ -1039,7 +1154,7 @@ function caseCard(c){
   const stale=isStalePending(c);
   return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="cmain">
-      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}
+      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}${cancelEmailIcon(c)}
       <div class="cmeta">${bits.join('')}</div>
       ${c.remark?`<div class="cdesc">${esc(c.remark)}</div>`:''}
       ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
@@ -1082,7 +1197,7 @@ function caseRow(c){
     <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</div>
     <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
-    <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}</div>
+    <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}${cancelEmailIcon(c)}</div>
     <div class="tcell">${statusBadge(c.status,stale)}<div class="tdate">${dateLine}</div></div>
     <div class="tcell"><b>${amountText(c)}</b>${ncdStartIcon(c)}</div>
     <div class="tcell">${c.refund?money(c.refund):'—'}</div>
