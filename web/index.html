@@ -458,6 +458,9 @@ EMAIL_PIC['Kurnia']=EMAIL_PIC['Liberty'];
 // of 6 insurers — not the same as INSURER_LIST used for case tracking (10 insurers, e.g. "Pacific"
 // not "Pacific Insurance") — see CANCEL_PIC_INS_ALIAS below for the name mapping between the two.
 const CANCEL_PIC={
+  // Kept short deliberately — the full letterhead (logo + company reg no + address) is now Teoh's
+  // actual Gmail signature (set up 2026-08-10), which Gmail auto-appends to every compose window
+  // including the one "Open in Gmail" opens. Putting it here too would duplicate it in the email.
   signature_block:'Team Chin Hock Agency (M) Sdn Bhd\nTel : Ms Teoh :010-538-4405 / Careline: 012-972-4405',
   insurers:{
     'Etiqa':{to:['rozawati.r@etiqa.com.my','aliahanis.hanis@etiqa.com.my','tzichi.soon@etiqa.com.my'],cc:['chinhockagency@hotmail.com'],cc_optional_urgent:['account@chinhockagency.com','angyy@chinhockagency.com'],subject_template:'POLICY CANCELLATION | {ref}',body_template:'Dear Team\nKindly assist with the cancellation. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the cancellation has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
