@@ -367,6 +367,7 @@ input[type=file]{display:none}
       <div class="today"><span>Today</span><b id="todayTxt"></b></div>
     </div>
     <div id="demoBanner"></div>
+    <div id="driveBanner"></div>
     <div id="view"></div>
   </main>
 </div>
@@ -755,6 +756,7 @@ function initDriveAuth(){
   driveTokenClient=google.accounts.oauth2.initTokenClient({client_id:DRIVE_CLIENT_ID,scope:DRIVE_SCOPE,callback:()=>{}});
 }
 function updateDriveStatusUI(){
+  renderDriveBanner();
   const el=document.getElementById('driveStatus');if(!el)return;
   el.textContent=!driveReady()?'Not set up yet — see Settings for one-time setup steps.':
     (driveAccessToken&&Date.now()<driveTokenExpiry)?'✅ Connected — new cases will get a Drive folder automatically.':
@@ -927,9 +929,20 @@ function render(){
   const attn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
   const b=document.getElementById('attnBadge');b.style.display=attn?'inline-block':'none';b.textContent=attn;
   renderDemoBanner();
+  renderDriveBanner();
   document.getElementById('view').innerHTML=CURVIEW==='settings'?viewSettings():CURVIEW==='ncdcalc'?viewNcdCalc():CURVIEW==='pipeline'?viewPipeline():viewDashboard();
   if(CURVIEW==='ncdcalc')NcdCalc.init();
   if(CURVIEW==='settings')updateDriveStatusUI();
+}
+// Drive auto-linking (case folder + Endorsement Form copy) fails completely silently when not
+// connected — addNew() calls autoCreateDriveFolder with {silent:true} so nothing ever told anyone
+// it wasn't working. This banner is the fix: it's the one place that makes "not connected" visible
+// without spamming a toast on every single case save (Teoh 2026-08-11 — reported the auto-upload
+// "doesn't seem to actually run").
+function renderDriveBanner(){
+  const el=document.getElementById('driveBanner');if(!el)return;
+  const connected=driveAccessToken&&Date.now()<driveTokenExpiry;
+  el.innerHTML=(driveReady()&&!connected)?`<div class="demo-banner">⚠️ Google Drive is not connected — new cases won't get their Drive folder or Endorsement Form copied in automatically until you connect it.<button onclick="connectDrive()">🔗 Connect Drive</button></div>`:'';
 }
 function renderDemoBanner(){const has=CASES.some(c=>c.demo);
   document.getElementById('demoBanner').innerHTML=has?`<div class="demo-banner">⚠️ Showing demo data so you can see every feature. Clear it anytime and add real cases.<button onclick="clearDemo()">Clear demo data</button></div>`:''}
