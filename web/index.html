@@ -1383,7 +1383,7 @@ function renderSheet(){
       </div>
       <div class="sect"><label class="h">Status &amp; Tracking</label>
         <div class="fld">
-          <div class="fld-label-row"><label>Status</label><span class="done-msg-icon" id="doneMsgIcon" style="display:none" title="" onclick="copyDoneMessage()">💬 Copy Message</span></div>
+          <div class="fld-label-row"><label>Status</label><span class="done-msg-icon" id="doneMsgIcon" style="display:none" title="" onclick="copyDoneMessage()">💬 Copy Message</span><span class="done-msg-icon" id="pendingSignedMsgIcon" style="display:none" title="" onclick="copyPendingSignedMessage()">💬 Copy Message</span></div>
           <select id="f_status">${STATUS_ORDER.map(k=>`<option ${STATUS_CFG[k].l===(STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'')?'selected':''}>${STATUS_CFG[k].l}</option>`).join('')}</select>
         </div>
         ${field('Submitted Date','f_submittedDate',c.submittedDate,'date')}
@@ -1416,6 +1416,7 @@ function renderSheet(){
     if(wrap)wrap.style.display=REFUND_TYPES.has(typeSel.value)?'block':'none';
     toggleEmailPicBtn('f_ins');
     toggleDoneMsgIcon();
+    togglePendingSignedMsgIcon();
   });
   toggleEmailPicBtn('f_ins');
   // Auto-fills Submitted Date with today the moment Status is switched to "Submitted" — only if it's
@@ -1427,12 +1428,14 @@ function renderSheet(){
       if(sd&&!sd.value){sd.value=toISO(new Date());sd.dispatchEvent(new Event('input'));}
     }
     toggleDoneMsgIcon();
+    togglePendingSignedMsgIcon();
   });
   const refundEl=document.getElementById('f_refund');
   if(refundEl)refundEl.addEventListener('input',toggleDoneMsgIcon);
   const plateEl=document.getElementById('f_plate');
-  if(plateEl)plateEl.addEventListener('input',toggleDoneMsgIcon);
+  if(plateEl){plateEl.addEventListener('input',toggleDoneMsgIcon);plateEl.addEventListener('input',togglePendingSignedMsgIcon);}
   toggleDoneMsgIcon();
+  togglePendingSignedMsgIcon();
 }
 // Policy Cancellation + Status "Done" shows a small copyable message next to the Status field — the
 // refund amount / plate always reflect whatever's currently typed in the form, not the last-saved values.
@@ -1455,6 +1458,31 @@ function toggleDoneMsgIcon(){
 }
 function copyDoneMessage(){
   const text=currentDoneRefundMessage();if(!text)return;
+  if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
+  navigator.clipboard.writeText(text).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
+}
+// Status "Pending Signed Form" shows a small copyable message next to the Status field, for every
+// endorsement type — plate/type always reflect whatever's currently typed, not the last-saved values
+// (Teoh 2026-08-11).
+function pendingSignedMessage(plate,type){
+  return `Please Signed the endorsement form (Page 1) to proceed ${plate} ${type}`;
+}
+function currentPendingSignedMessage(){
+  const c=get(openId);if(!c)return'';
+  const plateEl=document.getElementById('f_plate'),typeEl=document.getElementById('f_type');
+  const plate=(plateEl&&plateEl.value.trim())||c.plate;
+  const type=(typeEl&&typeEl.value)||c.type;
+  return pendingSignedMessage(plate,type);
+}
+function togglePendingSignedMsgIcon(){
+  const icon=document.getElementById('pendingSignedMsgIcon');if(!icon)return;
+  const statusSel=document.getElementById('f_status');
+  const show=!!statusSel&&statusSel.value===STATUS_CFG.pendingsigned.l;
+  icon.style.display=show?'inline-flex':'none';
+  if(show)icon.title=currentPendingSignedMessage();
+}
+function copyPendingSignedMessage(){
+  const text=currentPendingSignedMessage();if(!text)return;
   if(!navigator.clipboard||!navigator.clipboard.writeText){toast('Clipboard not available in this browser');return}
   navigator.clipboard.writeText(text).then(()=>toast('📋 Message copied')).catch(()=>toast('Could not copy to clipboard'));
 }
