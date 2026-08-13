@@ -473,10 +473,28 @@ const CANCEL_PIC={
   }
 };
 const CANCEL_PIC_INS_ALIAS={'Pacific':'Pacific Insurance'};
-function guessCancelInsurer(ins){
+// NCD Withdrawal "Proceed" step email PIC — same shape as CANCEL_PIC, own fixed list of 6 insurers
+// (Teoh 2026-08-11). Generali here uses to_optional_urgent (extra TO on urgent) instead of
+// CANCEL_PIC's Generali which uses to_optional_claim_linked — the "Urgent"/"Linked to a claim"
+// checkboxes in the email sheet just check whichever optional field the selected insurer/kind has.
+const NCD_PROCEED_PIC={
+  signature_block:'Team Chin Hock Agency (M) Sdn Bhd\nTel : Ms Teoh :010-538-4405 / Careline: 012-972-4405',
+  insurers:{
+    'Liberty':{to:['ncdlib@libertyinsurance.com.my'],cc:['junie.goh@libertyinsurance.com.my','tan-yong-yen@libertyinsurance.com.my','chinhockagency@hotmail.com','account@chinhockagency.com'],subject_template:'NCD WITHDRAWAL | {ref}',body_template:'Dear Team\nKindly assist. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the NCD withdrawal has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'RHB Insurance':{to:['priscillia.tan.zhiwei@rhbgroup.com','khow.weai.choon@rhbgroup.com'],cc:['chinhockagency@hotmail.com','account@chinhockagency.com'],subject_template:'NCD WITHDRAWAL | {ref}',body_template:'Dear Team\nKindly assist. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the NCD withdrawal has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Etiqa':{to:['rozawati.r@etiqa.com.my','tzichi.soon@etiqa.com.my','aliahanis.hanis@etiqa.com.my'],cc:['chinhockagency@hotmail.com','salesch@chinhockagency.com','account@chinhockagency.com'],subject_template:'NCD WITHDRAWAL | {ref}',body_template:'Dear Team\nKindly assist. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the NCD withdrawal has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Pacific Insurance':{to:['nirmala.govinda@pacificinsurance.com.my','desmondsim@pacificinsurance.com.my','jullee@pacificinsurance.com.my'],cc:['chinhockagency@hotmail.com','account@chinhockagency.com'],subject_template:'NCD WITHDRAWAL | {ref}',body_template:'Dear Team\nKindly assist. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the NCD withdrawal has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'},
+    'Generali':{to:['ezan.rahim@generali.com.my','brenda.fang@generali.com.my'],to_optional_urgent:['huaho.lim@generali.com.my'],cc:['chinhockagency@hotmail.com','account@chinhockagency.com'],subject_template:'NCD WITHDRAWAL | {ref}',body_template:'Dear Team Case Urgently:\nKindly assist. Please update NCD to ISM first.\nThank you\n\n{signature}',followup_body_template:'Dear All\nPlease send us the official receipt.\nThanks\n\n{signature}'},
+    'MSIG':{to:['aunnee_choong@my.msig-asia.com','Suki_Liew@my.msig-asia.com'],cc:['Cindy_Teoh@my.msig-asia.com','chinhockagency@hotmail.com','account@chinhockagency.com'],subject_template:'NCD WITHDRAWAL | {ref}',body_template:'Dear Team\nKindly assist. Please update NCD to ISM first\n\n{signature}',followup_body_template:'Dear All,\nMay I kindly check whether the NCD withdrawal has been completed? We would appreciate your update at your earliest convenience.\nThank you.\n\n{signature}'}
+  }
+};
+const NCD_PROCEED_INS_ALIAS={'Pacific':'Pacific Insurance','Rhb':'RHB Insurance'};
+function emailKindData(kind){return kind==='ncd'?NCD_PROCEED_PIC:CANCEL_PIC;}
+function emailKindAlias(kind){return kind==='ncd'?NCD_PROCEED_INS_ALIAS:CANCEL_PIC_INS_ALIAS;}
+function guessCancelInsurer(ins,kind){
   if(!ins)return'';
-  const mapped=CANCEL_PIC_INS_ALIAS[ins]||ins;
-  return Object.keys(CANCEL_PIC.insurers).find(k=>k.toLowerCase()===mapped.toLowerCase())||'';
+  const mapped=emailKindAlias(kind)[ins]||ins;
+  return Object.keys(emailKindData(kind).insurers).find(k=>k.toLowerCase()===mapped.toLowerCase())||'';
 }
 function toggleEmailPicBtn(insId){
   const typeId=insId==='n_ins'?'n_type':insId==='f_ins'?'f_type':null;
@@ -1068,12 +1086,12 @@ function copyNcdStartMessageFromForm(){
 // Cancellation Request Email — per-card generator (Teoh 2026-08-10)
 // ============================================================
 function cancelEmailIcon(c){
-  if(c.type!=='Policy Cancellation')return'';
-  return `<span class="tnc-icon" title="Cancellation Request Email" onclick="event.stopPropagation();openCancelEmail('${c.id}')">✉️</span>`;
+  if(c.type!=='Policy Cancellation'&&c.type!=='Ncd Withdrawal')return'';
+  return `<span class="tnc-icon" title="Cancellation / NCD Withdrawal Email" onclick="event.stopPropagation();openCancelEmail('${c.id}')">✉️</span>`;
 }
 function onCancelInsurerChange(){
   const ins=document.getElementById('ce_ins').value;
-  const data=CANCEL_PIC.insurers[ins];
+  const data=emailKindData(ceType).insurers[ins];
   const claimWrap=document.getElementById('ce_claimWrap');
   if(claimWrap)claimWrap.style.display=(data&&data.to_optional_claim_linked)?'flex':'none';
   const noteEl=document.getElementById('ce_note');
@@ -1082,13 +1100,29 @@ function onCancelInsurerChange(){
     else{noteEl.style.display='none';noteEl.textContent='';}
   }
 }
+let ceCase=null,ceType='cancellation';
 function openCancelEmail(id){
   const c=get(id);if(!c)return;
-  const insurerNames=Object.keys(CANCEL_PIC.insurers).sort((a,b)=>a.localeCompare(b));
-  const guessed=guessCancelInsurer(c.ins);
+  ceCase=c;
+  ceType=c.type==='Ncd Withdrawal'?'ncd':'cancellation';
+  renderCeSheet();
+  showSheet();
+}
+// Switches between the Policy Cancellation and NCD Withdrawal (Proceed) PIC lists — both share this
+// one form/UI, just reading a different data source (Teoh 2026-08-11). Re-renders the whole form
+// (clearing any generated result) since the insurer list itself changes between the two.
+function switchCeType(kind){ceType=kind;renderCeSheet();}
+function renderCeSheet(){
+  const c=ceCase;if(!c)return;
+  const insurerNames=Object.keys(emailKindData(ceType).insurers).sort((a,b)=>a.localeCompare(b));
+  const guessed=guessCancelInsurer(c.ins,ceType);
   document.getElementById('sheetContent').innerHTML=`
-    <div class="sheet-h"><div><h2>Cancellation Request Email</h2><div class="sub">${esc(c.plate)}${c.ins?' · '+esc(c.ins):''}</div></div><button class="x" onclick="closeSheet()">✕</button></div>
+    <div class="sheet-h"><div><h2>Cancellation / NCD Withdrawal Email</h2><div class="sub">${esc(c.plate)}${c.ins?' · '+esc(c.ins):''}</div></div><button class="x" onclick="closeSheet()">✕</button></div>
     <div class="sheet-b">
+      <div class="seg" style="margin-bottom:14px">
+        <button class="${ceType==='cancellation'?'on':''}" onclick="switchCeType('cancellation')">Policy Cancellation</button>
+        <button class="${ceType==='ncd'?'on':''}" onclick="switchCeType('ncd')">NCD Withdrawal</button>
+      </div>
       <div class="sect"><label class="h">Details</label>
         <div class="grid2">
           <div class="fld"><label>Insurance Company</label><select id="ce_ins" onchange="onCancelInsurerChange()">
@@ -1109,7 +1143,6 @@ function openCancelEmail(id){
       <div id="ce_result"></div>
     </div>`;
   onCancelInsurerChange();
-  showSheet();
 }
 function ceField(label,id,val,big){
   return `<div class="fld"><div class="fld-label-row"><label>${label}</label><button type="button" class="copy-pic" onclick="copyCeField('${id}')">📋 Copy</button></div>${big?`<textarea id="${id}" style="min-height:120px">${esc(val)}</textarea>`:`<input id="${id}" type="text" value="${esc(val)}">`}</div>`;
@@ -1120,8 +1153,9 @@ function copyCeField(id){
   navigator.clipboard.writeText(el.value).then(()=>toast('📋 Copied')).catch(()=>toast('Could not copy to clipboard'));
 }
 function generateCancelEmail(){
+  const kindData=emailKindData(ceType);
   const ins=document.getElementById('ce_ins').value;
-  const data=CANCEL_PIC.insurers[ins];
+  const data=kindData.insurers[ins];
   if(!data){toast('Please select an insurance company');return}
   const ref=document.getElementById('ce_ref').value.trim();
   if(!ref){toast('Please enter the Policy / Vehicle No.');return}
@@ -1131,13 +1165,15 @@ function generateCancelEmail(){
   const kind=document.getElementById('ce_kind').value;
   const drive=document.getElementById('ce_drive').value.trim();
 
-  const to=[...data.to,...(claim&&data.to_optional_claim_linked?data.to_optional_claim_linked:[])];
+  const to=[...data.to,
+    ...(claim&&data.to_optional_claim_linked?data.to_optional_claim_linked:[]),
+    ...(urgent&&data.to_optional_urgent?data.to_optional_urgent:[])];
   const cc=[...new Set([...data.cc,...(urgent?(data.cc_optional_urgent||[]):[])])];
   const subject=data.subject_template.replace('{ref}',ref);
   const bodyTemplate=kind==='followup'?(data.followup_body_template||data.body_template):data.body_template;
   let body=bodyTemplate;
   if(drive)body=body.replace('{signature}',`Related documents: ${drive}\n\n{signature}`);
-  body=body.replace('{signature}',CANCEL_PIC.signature_block);
+  body=body.replace('{signature}',kindData.signature_block);
 
   document.getElementById('ce_result').innerHTML=`
     <div class="sect"><label class="h">Generated Email</label>
