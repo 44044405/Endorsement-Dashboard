@@ -969,7 +969,7 @@ function clearDemo(){if(!confirm('Clear all demo data?'))return;CASES=CASES.filt
 // ============================================================
 // Dashboard view: metrics, filters, status tabs, card list
 // ============================================================
-let fltSearch='',fltType='',fltPic='',fltIns='',activeStatusTab='all',searchTimer=null;
+let fltSearch='',fltType='',fltPic='',fltIns='',searchTimer=null;
 // Defaults to newest enquiry first — Teoh wants the freshest cases up top without having to click the header.
 let dSortKey='enquiryDate',dSortDir=-1;
 function setDSort(key){if(dSortKey===key){dSortDir=-dSortDir}else{dSortKey=key;dSortDir=1}render()}
@@ -998,7 +998,16 @@ function setSearch(v){fltSearch=v.trim();clearTimeout(searchTimer);
   },200);
 }
 function clearSearch(){fltSearch='';render()}
-function setStatusTab(t){activeStatusTab=t;render()}
+// Status filter is multi-select — an empty Set means "All" (no filter). Reverted from the single-
+// select dropdown back to all-statuses-as-buttons per Teoh 2026-08-11 (wants to view e.g. Pending
+// Document + Pending Payment at once); the dropdown-for-clutter tradeoff from 2026-07-31 no longer
+// applies since these buttons can be lit up in combination instead of one at a time.
+let activeStatusTabs=new Set();
+function toggleStatusFilter(k){
+  if(activeStatusTabs.has(k))activeStatusTabs.delete(k);else activeStatusTabs.add(k);
+  render();
+}
+function clearStatusFilter(){activeStatusTabs=new Set();render()}
 function setFltType(v){fltType=v;render()}
 function setFltPic(v){fltPic=v;render()}
 function setFltIns(v){fltIns=v;render()}
@@ -1192,6 +1201,11 @@ function openCancelEmailInGmail(){
   const url=`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&cc=${encodeURIComponent(cc)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   window.open(url,'_blank');
 }
+// Flags a case whose insurance wasn't issued by Chin Hock (set via a checkbox on New Case /
+// case detail) — shown next to the plate on the card/row (Teoh 2026-08-11).
+function notIssuedByChNote(c){
+  return c.notIssuedByCh?` <span style="color:var(--e-followup);font-weight:600">(Insurance Not Issue by CH)</span>`:'';
+}
 function caseCard(c){
   const bits=[];
   if(c.ins)bits.push(`<span class="tag">${esc(c.ins)}</span>`);
@@ -1206,7 +1220,7 @@ function caseCard(c){
   const stale=isStalePending(c);
   return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="cmain">
-      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}${cancelEmailIcon(c)}
+      <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}${notIssuedByChNote(c)}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}${cancelEmailIcon(c)}
       <div class="cmeta">${bits.join('')}</div>
       ${c.remark?`<div class="cdesc">${esc(c.remark)}</div>`:''}
       ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
@@ -1247,7 +1261,7 @@ function caseRow(c){
   const stale=isStalePending(c);
   return `<div class="trow${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="tcell">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</div>
-    <div class="tplate">${esc(c.plate)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
+    <div class="tplate">${esc(c.plate)}${notIssuedByChNote(c)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
     <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}${cancelEmailIcon(c)}</div>
     <div class="tcell">${statusBadge(c.status,stale)}<div class="tdate">${dateLine}</div></div>
@@ -1286,27 +1300,20 @@ function viewDashboard(){
     <select onchange="setFltIns(this.value)"><option value="">All Insurance</option>${allIns.map(i=>`<option value="${esc(i)}" ${i===fltIns?'selected':''}>${esc(i)}</option>`).join('')}</select>
   </div>`;
 
-  // Only "All" stays as a tab button; every other status moved into a dropdown (still shows counts) so the
-  // bar doesn't get crowded as more statuses get added — see Teoh's request 2026-07-31.
   const tabs=`<div class="seg stabs">
-    <button class="${activeStatusTab==='all'?'on':''}" onclick="setStatusTab('all')">All <span class="tcount">${CASES.length}</span></button>
-    <select class="stabs-select" onchange="setStatusTab(this.value)">
-      <option value="" ${activeStatusTab==='all'?'selected':''} disabled>Filter by status…</option>
-      ${STATUS_ORDER.map(k=>`<option value="${k}" ${activeStatusTab===k?'selected':''}>${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} — ${counts[k]}</option>`).join('')}
-    </select>
+    <button class="${activeStatusTabs.size===0?'on':''}" onclick="clearStatusFilter()">All <span class="tcount">${CASES.length}</span></button>
+    ${STATUS_ORDER.map(k=>`<button class="${activeStatusTabs.has(k)?'on':''}${counts[k]?'':' zero'}" onclick="toggleStatusFilter('${k}')">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="tcount">${counts[k]}</span></button>`).join('')}
   </div>`;
 
   let body;
   if(!rows.length){
     body=`<div class="empty glass"><div class="ic">📭</div><div style="font-weight:640;color:var(--navy)">No cases match</div><div style="font-size:13px;margin-top:4px">Try clearing filters or add a new case.</div></div>`;
-  }else if(activeStatusTab==='all'){
-    body=STATUS_ORDER.map(k=>{
+  }else{
+    body=STATUS_ORDER.filter(k=>activeStatusTabs.size===0||activeStatusTabs.has(k)).map(k=>{
       const group=rows.filter(c=>c.status===k);
       if(!group.length)return'';
       return `<div class="sect-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${group.length}</span></div>${tableBlock(group)}`;
     }).join('');
-  }else{
-    body=tableBlock(rows.filter(c=>c.status===activeStatusTab));
   }
 
   return metrics+filters+tabs+body;
@@ -1411,6 +1418,7 @@ function renderSheet(){
         <div class="grid2">${field('Vehicle Number','f_plate',c.plate)}${field('Contact Number','f_contact',c.contact,'tel')}</div>
         <div class="grid2">${typeField('f_type',c.type)}${insField('f_ins',c.ins)}</div>
         <div class="grid2">${field('PIC','f_pic',c.pic,'select',PIC_LIST)}${field('Enquiry Date','f_enquiryDate',c.enquiryDate,'date')}</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin:4px 2px 10px"><input type="checkbox" id="f_notIssuedByCh" ${c.notIssuedByCh?'checked':''}> Insurance Not Issue By CH</label>
         ${field('Remark','f_remark',c.remark,'textarea')}
       </div>
       <div class="sect"><label class="h" style="display:flex;align-items:center;justify-content:space-between">Amounts${c.type==='Ncd Withdrawal'?`<span class="done-msg-icon" onclick="copyNcdStartMessageFromForm()">📋 Copy Message</span>`:''}</label>
@@ -1551,6 +1559,8 @@ function readSheet(){
   c.ins=readInsValue('f_ins');
   c.pic=g('f_pic')||c.pic;
   c.enquiryDate=g('f_enquiryDate')||'';
+  const notIssuedEl=document.getElementById('f_notIssuedByCh');
+  c.notIssuedByCh=!!(notIssuedEl&&notIssuedEl.checked);
   c.remark=g('f_remark')||'';
   const newStatus=LABEL_TO_KEY[g('f_status')]||c.status;
   if(newStatus!==c.status)logActivity('Status changed',`${c.plate} · ${STATUS_CFG[c.status].l} → ${STATUS_CFG[newStatus].l}`);
@@ -1595,6 +1605,7 @@ function renderNewSheet(){
         <div class="grid2">${field('Vehicle Number','n_plate','')}${field('Contact Number','n_contact','','tel')}</div>
         <div class="grid2">${typeField('n_type','Policy Cancellation',true)}${insField('n_ins','')}</div>
         <div class="grid2">${field('PIC','n_pic',defaultPicForLogin(),'select',PIC_LIST)}${field('Enquiry Date','n_enquiryDate',toISO(new Date()),'date')}</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin:4px 2px 10px"><input type="checkbox" id="n_notIssuedByCh"> Insurance Not Issue By CH</label>
         ${field('Remark','n_remark','','textarea')}
         ${linkField('Drive File Link','n_driveUrl','','<button type="button" class="copy-pic" id="n_getDriveBtn" onclick="getDriveLinkForNewCase()">🔗 Get Drive Link</button>')}
         <button type="button" class="mini" style="margin-top:8px" onclick="copyNotifyMessageForNewCase()">📋 Copy Notification Message</button>
@@ -1625,7 +1636,8 @@ function saveNewCaseDraft(){
     plate:g('n_plate'),contact:g('n_contact'),type:g('n_type'),typeNew:g('n_typeNewInput'),
     ins:g('n_ins'),insOther:g('n_insOtherInput'),pic:g('n_pic'),enquiryDate:g('n_enquiryDate'),
     remark:g('n_remark'),driveUrl:g('n_driveUrl'),
-    bankHolder:g('n_bankHolder'),bankName:g('n_bankName'),bankAcctNo:g('n_bankAcctNo')
+    bankHolder:g('n_bankHolder'),bankName:g('n_bankName'),bankAcctNo:g('n_bankAcctNo'),
+    notIssuedByCh:!!document.getElementById('n_notIssuedByCh').checked
   };
   localStorage.setItem(NEW_CASE_DRAFT_KEY,JSON.stringify(draft));
 }
@@ -1637,6 +1649,7 @@ function applyNewCaseDraft(){
   set('n_pic',draft.pic);set('n_enquiryDate',draft.enquiryDate);set('n_remark',draft.remark);
   set('n_driveUrl',draft.driveUrl);
   set('n_bankHolder',draft.bankHolder);set('n_bankName',draft.bankName);set('n_bankAcctNo',draft.bankAcctNo);
+  const notIssuedEl=document.getElementById('n_notIssuedByCh');if(notIssuedEl)notIssuedEl.checked=!!draft.notIssuedByCh;
   const typeSel=document.getElementById('n_type');
   if(typeSel&&draft.type){typeSel.value=draft.type;typeSel.dispatchEvent(new Event('change'));}
   set('n_typeNewInput',draft.typeNew);
@@ -1651,8 +1664,9 @@ function addNew(){
   const typeSelEl=document.getElementById('n_type');
   if(typeSelEl&&typeSelEl.value===NEW_TYPE_OPT&&!g('n_typeNewInput').trim()){toast('Please type the new endorsement type name');return}
   const bankHolder=g('n_bankHolder').trim(),bankName=g('n_bankName').trim(),bankAcctNo=g('n_bankAcctNo').trim();
+  const notIssuedEl=document.getElementById('n_notIssuedByCh');
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
-    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),bankHolder,bankName,bankAcctNo,followup:'',followupDate:'',followupBy:'',status:'new',submittedDate:'',
+    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),notIssuedByCh:!!(notIssuedEl&&notIssuedEl.checked),bankHolder,bankName,bankAcctNo,followup:'',followupDate:'',followupBy:'',status:'new',submittedDate:'',
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
   CASES.push(c);save();clearNewCaseDraft();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
