@@ -168,7 +168,7 @@ body{
 .tag b{color:var(--ink);font-weight:600}
 .cdesc{font-size:12.5px;color:var(--ink-soft);margin-top:8px;border-left:3px solid var(--line);padding-left:9px;white-space:pre-line}
 .cright{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
-.status-badge{font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:20px;white-space:nowrap}
+.status-badge{display:inline-block;font-size:11.5px;font-weight:700;padding:5px 12px;border-radius:20px;white-space:nowrap;margin:1px 3px 1px 0}
 .b-new{background:var(--e-new-bg);color:var(--e-new)}
 .b-followup{background:var(--e-followup-bg);color:var(--e-followup)}
 .b-submitted{background:var(--e-submitted-bg);color:var(--e-submitted)}
@@ -536,6 +536,43 @@ const STATUS_CFG={
   cancelled:{l:'Cancel',ic:'🚫',order:11}
 };
 const STATUS_ORDER=Object.keys(STATUS_CFG);
+// A case can now hold multiple simultaneous statuses (Teoh 2026-08-11) — c.statuses is the array;
+// c.status is the old singular field, kept only as a fallback for cases saved before this change
+// (never written to anymore). "Primary" = whichever active status comes first in STATUS_ORDER —
+// drives the one-color things that can't show multiple at once (card border, sort-by-status).
+function caseStatuses(c){
+  if(Array.isArray(c.statuses)&&c.statuses.length)return c.statuses;
+  return c.status?[c.status]:['new'];
+}
+function casePrimaryStatus(c){
+  const list=caseStatuses(c);
+  return list.reduce((best,k)=>(!best||(STATUS_CFG[k]&&STATUS_CFG[best]&&STATUS_CFG[k].order<STATUS_CFG[best].order))?k:best,list[0]);
+}
+// Case detail sheet's Status field — a checkbox-list popover (same pattern as the Dashboard status
+// filter), not a plain select, since a case can be in several statuses at once. Doesn't call
+// renderSheet()/render() on every toggle — that would wipe out any other unsaved edits in the sheet
+// (Remark, Amounts, etc. only live in the DOM until Save) — so this only touches its own DOM bits.
+function statusSummaryText(list){
+  return list.length?list.map(k=>`${STATUS_CFG[k].ic} ${STATUS_CFG[k].l}`).join(', '):'— Select status —';
+}
+function readFStatusChecks(){return [...document.querySelectorAll('.fStatusChk:checked')].map(i=>i.value)}
+function toggleFStatusMenu(){
+  const m=document.getElementById('fStatusMenu');if(!m)return;
+  m.style.display=m.style.display==='none'?'block':'none';
+}
+function onFStatusChange(){
+  const checked=readFStatusChecks();
+  const trigger=document.getElementById('fStatusTrigger');
+  if(trigger)trigger.textContent=statusSummaryText(checked);
+  // Auto-fills Submitted Date with today the moment "Submitted" gets checked — only if it's still
+  // blank, so it never clobbers a date someone already set deliberately.
+  if(checked.includes('submitted')){
+    const sd=document.getElementById('f_submittedDate');
+    if(sd&&!sd.value){sd.value=toISO(new Date());sd.dispatchEvent(new Event('input'));}
+  }
+  toggleDoneMsgIcon();
+  togglePendingSignedMsgIcon();
+}
 
 // ============================================================
 // Date / util helpers
@@ -676,9 +713,10 @@ function seed(){
 // ============================================================
 function autoFollowUp(){let ch=false;const today=toISO(new Date());
   CASES.forEach(c=>{
-    if(c.status!=='submitted'||!c.submittedDate)return;
+    const list=caseStatuses(c);
+    if(!list.includes('submitted')||!c.submittedDate)return;
     const d=daysUntil(c.submittedDate);
-    if(d!=null&&d<=-2){c.status='followup';ch=true;logActivity('Status changed',c.plate+' · Submitted → Follow Up (auto, no update in 2+ days)');}
+    if(d!=null&&d<=-2){c.statuses=list.filter(k=>k!=='submitted').concat('followup');ch=true;logActivity('Status changed',c.plate+' · Submitted → Follow Up (auto, no update in 2+ days)');}
   });
   if(ch)save();return ch;
 }
@@ -948,7 +986,7 @@ function render(){
   document.getElementById('todayTxt').textContent=fmtLong(toISO(new Date()));
   document.getElementById('pgTitle').textContent=TITLES[CURVIEW][0];
   document.getElementById('pgSub').textContent=TITLES[CURVIEW][1];
-  const attn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
+  const attn=CASES.filter(c=>{const l=caseStatuses(c);return l.includes('new')||l.includes('followup')}).length;
   const b=document.getElementById('attnBadge');b.style.display=attn?'inline-block':'none';b.textContent=attn;
   renderDemoBanner();
   renderDriveBanner();
@@ -979,7 +1017,7 @@ let dSortKey='enquiryDate',dSortDir=-1;
 function setDSort(key){if(dSortKey===key){dSortDir=-dSortDir}else{dSortKey=key;dSortDir=1}render()}
 function dSortIcon(key){if(dSortKey!==key)return '<span class="sort-ic">▽</span>';return dSortDir===1?'<span class="sort-ic on">▲</span>':'<span class="sort-ic on">▼</span>'}
 function dSortVal(c,key){
-  if(key==='status')return STATUS_CFG[c.status]?STATUS_CFG[c.status].order:0;
+  if(key==='status'){const p=casePrimaryStatus(c);return STATUS_CFG[p]?STATUS_CFG[p].order:0;}
   if(key==='amount')return (+c.gross||0)+(+c.nett||0);
   if(key==='refund')return +c.refund||0;
   if(key==='refundDate')return (c.refundDate||'')+'';
@@ -1039,8 +1077,15 @@ function ageLabel(c){
 // Keyed in today — shows a "NEW" tag next to the date that disappears on its own the next calendar day.
 function isFreshToday(c){return !!c.createdAt&&toISO(new Date(c.createdAt))===toISO(new Date())}
 // Still Pending Proceed 36+ hours after keying in, with no status change since — needs a red alert to stand out.
-function isStalePending(c){return c.status==='new'&&!!c.createdAt&&(Date.now()-c.createdAt)/36e5>=36}
+function isStalePending(c){return caseStatuses(c).includes('new')&&!!c.createdAt&&(Date.now()-c.createdAt)/36e5>=36}
 function statusBadge(status,urgent){const s=STATUS_CFG[status]||{l:status,ic:''};return `<span class="status-badge b-${status}${urgent?' b-urgent':''}">${urgent?'⏰ ':''}${s.ic} ${s.l}</span>`}
+// Renders one badge per active status (canonical STATUS_ORDER order, not storage order) — the stale/
+// urgent clock only ever applies to the primary one (always "new" when stale, since that has the
+// lowest order of anything that could be present).
+function statusBadges(c,stale){
+  const list=caseStatuses(c),primary=casePrimaryStatus(c);
+  return STATUS_ORDER.filter(k=>list.includes(k)).map(k=>statusBadge(k,stale&&k===primary)).join('');
+}
 // Terms & Conditions per endorsement type (Chinese + English) — shown via a ❗ icon next to the type on
 // every case card/row for types that have one on file. Hover previews it (native title tooltip, which
 // renders \n as line breaks); clicking copies both language versions to the clipboard.
@@ -1221,7 +1266,7 @@ function caseCard(c){
   else if(REFUND_TYPES.has(c.type))bits.push(`<span class="tag" style="color:var(--e-followup);font-weight:600">⏳ Refund Pending</span>`);
   if(c.driveUrl)bits.push(`<a class="tag" href="${c.driveUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()">🔗 Drive Link</a>`);
   const stale=isStalePending(c);
-  return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
+  return `<div class="card glass lift st-${casePrimaryStatus(c)}${stale?' stale-alert':''}" onclick="openDetail('${c.id}')">
     <div class="cmain">
       <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}${notIssuedByChNote(c)}</h3><span class="type-pill">${esc(c.type)}</span>${tncIcon(c.type)}${cancelEmailIcon(c)}
       <div class="cmeta">${bits.join('')}</div>
@@ -1229,7 +1274,7 @@ function caseCard(c){
       ${c.followup?`<div class="cdesc" style="border-left-color:var(--e-followup)">📌 ${esc(c.followup)}</div>`:''}
     </div>
     <div class="cright">
-      ${statusBadge(c.status,stale)}
+      ${statusBadges(c,stale)}
       <div class="cage">${ageLabel(c)}</div>
     </div>
   </div>`;
@@ -1267,7 +1312,7 @@ function caseRow(c){
     <div class="tplate">${esc(c.plate)}${notIssuedByChNote(c)}${c.pic?`<small>${esc(c.pic)}</small>`:''}</div>
     <div class="tcell">${c.ins?esc(c.ins):'—'}</div>
     <div class="tcell"><b>${esc(c.type)}</b>${tncIcon(c.type)}${cancelEmailIcon(c)}</div>
-    <div class="tcell">${statusBadge(c.status,stale)}<div class="tdate">${dateLine}</div></div>
+    <div class="tcell">${statusBadges(c,stale)}<div class="tdate">${dateLine}</div></div>
     <div class="tcell"><b>${amountText(c)}</b>${ncdStartIcon(c)}</div>
     <div class="tcell">${c.refund?money(c.refund):'—'}</div>
     <div class="tcell">${refundDateText(c)}</div>
@@ -1280,10 +1325,10 @@ function tableBlock(list){
 function viewDashboard(){
   const rows=filteredCases();
   const total=CASES.length;
-  const needAttn=CASES.filter(c=>c.status==='new'||c.status==='followup').length;
-  const inProgress=CASES.filter(c=>['submitted','pendingdone','pendingpay','pendingletter','pendingsigned','pendingdoc'].includes(c.status)).length;
-  const doneThisMonth=CASES.filter(c=>c.status==='done'&&isDoneThisMonth(c)).length;
-  const counts={};STATUS_ORDER.forEach(k=>counts[k]=CASES.filter(c=>c.status===k).length);
+  const needAttn=CASES.filter(c=>{const l=caseStatuses(c);return l.includes('new')||l.includes('followup')}).length;
+  const inProgress=CASES.filter(c=>caseStatuses(c).some(k=>['submitted','pendingdone','pendingpay','pendingletter','pendingsigned','pendingdoc'].includes(k))).length;
+  const doneThisMonth=CASES.filter(c=>caseStatuses(c).includes('done')&&isDoneThisMonth(c)).length;
+  const counts={};STATUS_ORDER.forEach(k=>counts[k]=CASES.filter(c=>caseStatuses(c).includes(k)).length);
 
   const allTypes=[...new Set(CASES.map(c=>c.type).filter(Boolean))].sort();
   const allPics=[...new Set(CASES.map(c=>c.pic).filter(Boolean))].sort();
@@ -1316,7 +1361,7 @@ function viewDashboard(){
     body=`<div class="empty glass"><div class="ic">📭</div><div style="font-weight:640;color:var(--navy)">No cases match</div><div style="font-size:13px;margin-top:4px">Try clearing filters or add a new case.</div></div>`;
   }else{
     body=STATUS_ORDER.filter(k=>activeStatusTabs.size===0||activeStatusTabs.has(k)).map(k=>{
-      const group=rows.filter(c=>c.status===k);
+      const group=rows.filter(c=>caseStatuses(c).includes(k));
       if(!group.length)return'';
       return `<div class="sect-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${group.length}</span></div>${tableBlock(group)}`;
     }).join('');
@@ -1332,7 +1377,7 @@ const PIPELINE_STATUSES=['new','pendingconfirm','pendingdoc','pendingpay','follo
 // says the status; click still opens the full detail sheet like everywhere else (Teoh 2026-08-10).
 function pipelineCard(c){
   const stale=isStalePending(c);
-  return `<div class="card glass lift st-${c.status}${stale?' stale-alert':''} pipe-card-mini" onclick="openDetail('${c.id}')">
+  return `<div class="card glass lift st-${casePrimaryStatus(c)}${stale?' stale-alert':''} pipe-card-mini" onclick="openDetail('${c.id}')">
     <div class="cmain">
       <h3>${esc(c.plate)}${isFreshToday(c)?'<span class="new-tag">NEW</span>':''}</h3>
       <div class="cmeta"><span class="tag">${esc(c.type)}</span><span class="tag">${c.enquiryDate?fmtLong(c.enquiryDate):'—'}</span></div>
@@ -1341,7 +1386,7 @@ function pipelineCard(c){
 }
 function viewPipeline(){
   const cols=PIPELINE_STATUSES.map(k=>{
-    const list=CASES.filter(c=>c.status===k);
+    const list=CASES.filter(c=>caseStatuses(c).includes(k));
     const cards=list.length?applyDSort(list).map(pipelineCard).join(''):`<div class="pipe-empty">No cases</div>`;
     return `<div class="pipe-col">
       <div class="pipe-col-head">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${list.length}</span></div>
@@ -1434,7 +1479,12 @@ function renderSheet(){
       <div class="sect"><label class="h">Status &amp; Tracking</label>
         <div class="fld">
           <div class="fld-label-row"><label>Status</label><span class="done-msg-icon" id="doneMsgIcon" style="display:none" title="" onclick="copyDoneMessage()">💬 Copy Message</span><span class="done-msg-icon" id="pendingSignedMsgIcon" style="display:none" title="" onclick="copyPendingSignedMessage()">💬 Copy Message</span></div>
-          <select id="f_status">${STATUS_ORDER.map(k=>`<option ${STATUS_CFG[k].l===(STATUS_CFG[c.status]?STATUS_CFG[c.status].l:'')?'selected':''}>${STATUS_CFG[k].l}</option>`).join('')}</select>
+          <div style="position:relative">
+            <button type="button" class="stabs-select" id="fStatusTrigger" style="width:100%;text-align:left;border:1px solid var(--line);background:#fff;border-radius:12px;padding:11px 14px" onclick="toggleFStatusMenu()">${statusSummaryText(caseStatuses(c))}</button>
+            <div id="fStatusMenu" class="status-menu" style="display:none;width:100%">
+              ${STATUS_ORDER.map(k=>`<label class="status-menu-item"><input type="checkbox" class="fStatusChk" value="${k}" ${caseStatuses(c).includes(k)?'checked':''} onchange="onFStatusChange()">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l}</label>`).join('')}
+            </div>
+          </div>
         </div>
         ${field('Submitted Date','f_submittedDate',c.submittedDate,'date')}
         <div class="grid2">
@@ -1469,17 +1519,6 @@ function renderSheet(){
     togglePendingSignedMsgIcon();
   });
   toggleEmailPicBtn('f_ins');
-  // Auto-fills Submitted Date with today the moment Status is switched to "Submitted" — only if it's
-  // still blank, so it never clobbers a date someone already set deliberately.
-  const statusSel=document.getElementById('f_status');
-  if(statusSel)statusSel.addEventListener('change',()=>{
-    if(statusSel.value===STATUS_CFG.submitted.l){
-      const sd=document.getElementById('f_submittedDate');
-      if(sd&&!sd.value){sd.value=toISO(new Date());sd.dispatchEvent(new Event('input'));}
-    }
-    toggleDoneMsgIcon();
-    togglePendingSignedMsgIcon();
-  });
   const refundEl=document.getElementById('f_refund');
   if(refundEl)refundEl.addEventListener('input',toggleDoneMsgIcon);
   const plateEl=document.getElementById('f_plate');
@@ -1501,8 +1540,8 @@ function currentDoneRefundMessage(){
 }
 function toggleDoneMsgIcon(){
   const icon=document.getElementById('doneMsgIcon');if(!icon)return;
-  const statusSel=document.getElementById('f_status'),typeSel=document.getElementById('f_type');
-  const show=!!statusSel&&statusSel.value===STATUS_CFG.done.l&&!!typeSel&&typeSel.value==='Policy Cancellation';
+  const typeSel=document.getElementById('f_type');
+  const show=readFStatusChecks().includes('done')&&!!typeSel&&typeSel.value==='Policy Cancellation';
   icon.style.display=show?'inline-flex':'none';
   if(show)icon.title=currentDoneRefundMessage();
 }
@@ -1526,8 +1565,7 @@ function currentPendingSignedMessage(){
 }
 function togglePendingSignedMsgIcon(){
   const icon=document.getElementById('pendingSignedMsgIcon');if(!icon)return;
-  const statusSel=document.getElementById('f_status');
-  const show=!!statusSel&&statusSel.value===STATUS_CFG.pendingsigned.l;
+  const show=readFStatusChecks().includes('pendingsigned');
   icon.style.display=show?'inline-flex':'none';
   if(show)icon.title=currentPendingSignedMessage();
 }
@@ -1558,7 +1596,8 @@ function addFollowupLogEntry(){
 function readSheet(){
   const c=get(openId);if(!c)return null;
   const g=id=>{const e=document.getElementById(id);return e?e.value:undefined};
-  const LABEL_TO_KEY=Object.fromEntries(STATUS_ORDER.map(k=>[STATUS_CFG[k].l,k]));
+  const newStatuses=readFStatusChecks();
+  if(!newStatuses.length){toast('Please select at least one status');return null}
   c.plate=(g('f_plate')||c.plate).trim().toUpperCase();
   c.contact=g('f_contact')||'';
   c.type=g('f_type')||c.type;
@@ -1568,9 +1607,10 @@ function readSheet(){
   const notIssuedEl=document.getElementById('f_notIssuedByCh');
   c.notIssuedByCh=!!(notIssuedEl&&notIssuedEl.checked);
   c.remark=g('f_remark')||'';
-  const newStatus=LABEL_TO_KEY[g('f_status')]||c.status;
-  if(newStatus!==c.status)logActivity('Status changed',`${c.plate} · ${STATUS_CFG[c.status].l} → ${STATUS_CFG[newStatus].l}`);
-  c.status=newStatus;
+  const oldStatuses=caseStatuses(c);
+  if(oldStatuses.slice().sort().join(',')!==newStatuses.slice().sort().join(','))
+    logActivity('Status changed',`${c.plate} · ${oldStatuses.map(k=>STATUS_CFG[k].l).join(' + ')} → ${newStatuses.map(k=>STATUS_CFG[k].l).join(' + ')}`);
+  c.statuses=newStatuses;
   c.submittedDate=g('f_submittedDate')||'';
   c.followup=g('f_followup')||'';
   c.followupDate=g('f_followupDate')||'';
@@ -1587,8 +1627,8 @@ function readSheet(){
 }
 function saveSheet(){
   const c=readSheet();if(!c)return;
-  if(c.status==='done'&&REFUND_TYPES.has(c.type)&&!c.refundDate){
-    c.status='followup';
+  if(caseStatuses(c).includes('done')&&REFUND_TYPES.has(c.type)&&!c.refundDate){
+    c.statuses=caseStatuses(c).filter(k=>k!=='done').concat('followup');
     logActivity('Status changed',`${c.plate} · Done → Follow Up (auto, Refund Date not filled in)`);
     save();renderSheet();render();
     toast('⚠️ Refund Date is required to mark this type as Done — moved to Follow Up instead');
@@ -1672,7 +1712,7 @@ function addNew(){
   const bankHolder=g('n_bankHolder').trim(),bankName=g('n_bankName').trim(),bankAcctNo=g('n_bankAcctNo').trim();
   const notIssuedEl=document.getElementById('n_notIssuedByCh');
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
-    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),notIssuedByCh:!!(notIssuedEl&&notIssuedEl.checked),bankHolder,bankName,bankAcctNo,followup:'',followupDate:'',followupBy:'',status:'new',submittedDate:'',
+    pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),notIssuedByCh:!!(notIssuedEl&&notIssuedEl.checked),bankHolder,bankName,bankAcctNo,followup:'',followupDate:'',followupBy:'',statuses:['new'],submittedDate:'',
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
   CASES.push(c);save();clearNewCaseDraft();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
