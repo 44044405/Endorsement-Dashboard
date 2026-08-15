@@ -110,6 +110,10 @@ body{
 .stabs-select{border:0;background:transparent;font:inherit;font-size:12.5px;font-weight:560;color:var(--ink-soft);padding:7px 10px;border-radius:9px;cursor:pointer;max-width:240px}
 .stabs-select:hover{background:rgba(22,39,63,.05)}
 .stabs-select:focus{outline:2px solid var(--accent);outline-offset:1px}
+.status-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:40;background:var(--glass-strong);backdrop-filter:blur(22px) saturate(180%);-webkit-backdrop-filter:blur(22px) saturate(180%);border:1px solid rgba(255,255,255,.72);border-radius:14px;box-shadow:var(--shadow-lift);padding:8px;min-width:240px;max-height:320px;overflow-y:auto}
+.status-menu-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:9px;font-size:13px;color:var(--ink);cursor:pointer;white-space:nowrap}
+.status-menu-item:hover{background:rgba(22,39,63,.06)}
+.status-menu-item .cnt{margin-left:auto;font-size:11px;color:var(--ink-faint);background:rgba(22,39,63,.07);border-radius:9px;padding:1px 7px}
 
 .sect-head{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin:18px 2px 8px;display:flex;align-items:center;gap:8px}
 .sect-head .cnt{background:rgba(40,70,110,.08);border-radius:9px;padding:1px 8px;font-size:11px}
@@ -998,16 +1002,15 @@ function setSearch(v){fltSearch=v.trim();clearTimeout(searchTimer);
   },200);
 }
 function clearSearch(){fltSearch='';render()}
-// Status filter is multi-select — an empty Set means "All" (no filter). Reverted from the single-
-// select dropdown back to all-statuses-as-buttons per Teoh 2026-08-11 (wants to view e.g. Pending
-// Document + Pending Payment at once); the dropdown-for-clutter tradeoff from 2026-07-31 no longer
-// applies since these buttons can be lit up in combination instead of one at a time.
-let activeStatusTabs=new Set();
+// Status filter is multi-select — an empty Set means "All" (no filter). Lives in a dropdown
+// checkbox menu (not all-statuses-as-buttons, which got too cluttered again) — Teoh 2026-08-11.
+let activeStatusTabs=new Set(),statusMenuOpen=false;
 function toggleStatusFilter(k){
   if(activeStatusTabs.has(k))activeStatusTabs.delete(k);else activeStatusTabs.add(k);
   render();
 }
-function clearStatusFilter(){activeStatusTabs=new Set();render()}
+function clearStatusFilter(){activeStatusTabs=new Set();statusMenuOpen=false;render()}
+function toggleStatusMenu(){statusMenuOpen=!statusMenuOpen;render()}
 function setFltType(v){fltType=v;render()}
 function setFltPic(v){fltPic=v;render()}
 function setFltIns(v){fltIns=v;render()}
@@ -1300,9 +1303,12 @@ function viewDashboard(){
     <select onchange="setFltIns(this.value)"><option value="">All Insurance</option>${allIns.map(i=>`<option value="${esc(i)}" ${i===fltIns?'selected':''}>${esc(i)}</option>`).join('')}</select>
   </div>`;
 
-  const tabs=`<div class="seg stabs">
+  const tabs=`<div class="seg stabs" style="position:relative">
     <button class="${activeStatusTabs.size===0?'on':''}" onclick="clearStatusFilter()">All <span class="tcount">${CASES.length}</span></button>
-    ${STATUS_ORDER.map(k=>`<button class="${activeStatusTabs.has(k)?'on':''}${counts[k]?'':' zero'}" onclick="toggleStatusFilter('${k}')">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="tcount">${counts[k]}</span></button>`).join('')}
+    <button type="button" class="stabs-select" onclick="toggleStatusMenu()">🔽 ${activeStatusTabs.size?`Status (${activeStatusTabs.size} selected)`:'Filter by status…'}</button>
+    <div id="statusMenu" class="status-menu" style="display:${statusMenuOpen?'block':'none'}">
+      ${STATUS_ORDER.map(k=>`<label class="status-menu-item"><input type="checkbox" ${activeStatusTabs.has(k)?'checked':''} onchange="toggleStatusFilter('${k}')">${STATUS_CFG[k].ic} ${STATUS_CFG[k].l} <span class="cnt">${counts[k]}</span></label>`).join('')}
+    </div>
   </div>`;
 
   let body;
