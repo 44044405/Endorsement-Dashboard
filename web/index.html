@@ -908,6 +908,20 @@ const INSURER_FORM_FILE={
   'Generali':'1W-OIHW8KAP0srbEzn23vP_3CRyNHN1rQ',
 };
 INSURER_FORM_FILE['Kurnia']=INSURER_FORM_FILE['Liberty'];
+// Same plate + same endorsement type already got a Drive folder generated this calendar month?
+// Reuse that link instead of creating a second folder for what's almost certainly the same request
+// re-keyed or double-clicked (Teoh 2026-08-12). A same plate+type case from an EARLIER month is a
+// genuinely separate event (e.g. this vehicle's policy got cancelled again later) — not blocked.
+function findThisMonthDriveUrl(plate,type,excludeId){
+  const now=new Date();
+  const match=CASES.find(c=>{
+    if(c.id===excludeId||!c.driveUrl||!c.driveGeneratedAt)return false;
+    if((c.plate||'').trim().toUpperCase()!==plate.trim().toUpperCase()||c.type!==type)return false;
+    const d=new Date(c.driveGeneratedAt);
+    return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+  });
+  return match?match.driveUrl:null;
+}
 // Finds/creates the case's Drive folder and fills in driveUrl — runs in
 // the background (not awaited by the caller) so adding a case never
 // blocks on a Drive round-trip; silently no-ops if Drive isn't
@@ -934,8 +948,17 @@ async function resolveCaseDriveUrl(type,plate,enquiryDate,pic,ins){
   return `https://drive.google.com/drive/folders/${caseFolderId}`;
 }
 async function autoCreateDriveFolder(c,{silent}={}){
+  const existing=findThisMonthDriveUrl(c.plate,c.type,c.id);
+  if(existing){
+    c.driveUrl=existing;c.driveGeneratedAt=Date.now();save();
+    if(CURVIEW==='dashboard')render();
+    if(openId===c.id)renderSheet();
+    toast('📁 '+c.plate+' already has a Drive file for '+c.type+' this month — reused the existing link');
+    return;
+  }
   try{
     c.driveUrl=await resolveCaseDriveUrl(c.type,c.plate,c.enquiryDate,c.pic,c.ins);
+    c.driveGeneratedAt=Date.now();
     save();
     if(CURVIEW==='dashboard')render();
     if(openId===c.id)renderSheet();
@@ -947,30 +970,40 @@ async function autoCreateDriveFolder(c,{silent}={}){
 // "🔗 Get Drive Link" button in the New Case form — creates/finds the folder right away from whatever's
 // currently typed in the form (case isn't saved yet) and fills the Drive Link field with it, so PIC can
 // open it and start uploading documents before even hitting "Add case".
+function patchDriveLinkOpenBtn(urlInput,url){
+  // linkField() only renders the "Open ↗" link at initial render time, so patch it in directly here
+  // rather than re-rendering the whole form (which would wipe out whatever the PIC has already typed).
+  let openLink=document.getElementById('n_driveUrlOpen');
+  if(!openLink&&urlInput){
+    openLink=document.createElement('a');
+    openLink.id='n_driveUrlOpen';openLink.className='openlink';openLink.target='_blank';openLink.rel='noopener';
+    openLink.textContent='Open ↗';
+    const label=urlInput.closest('.fld').querySelector('label');
+    if(label)label.appendChild(openLink);
+  }
+  if(openLink)openLink.href=url;
+}
 async function getDriveLinkForNewCase(){
   const g=id=>{const e=document.getElementById(id);return e?e.value:''};
   const plate=g('n_plate').trim().toUpperCase();
   if(!plate){toast('Please enter a vehicle number first');return}
+  const type=readTypeValue('n_type')||TYPE_LIST[0];
+  const existing=findThisMonthDriveUrl(plate,type,null);
+  if(existing){
+    const urlInput=document.getElementById('n_driveUrl');if(urlInput)urlInput.value=existing;
+    patchDriveLinkOpenBtn(urlInput,existing);
+    toast('📁 '+plate+' already has a Drive file for '+type+' this month — reused the existing link');
+    return;
+  }
   const btn=document.getElementById('n_getDriveBtn');
   if(btn){btn.disabled=true;btn.textContent='📁 Creating…';}
   try{
-    const type=readTypeValue('n_type')||TYPE_LIST[0];
     const pic=g('n_pic')||PIC_LIST[0];
     const enquiryDate=g('n_enquiryDate')||toISO(new Date());
     const ins=readInsValue('n_ins');
     const url=await resolveCaseDriveUrl(type,plate,enquiryDate,pic,ins);
     const urlInput=document.getElementById('n_driveUrl');if(urlInput)urlInput.value=url;
-    // linkField() only renders the "Open ↗" link at initial render time, so patch it in directly here
-    // rather than re-rendering the whole form (which would wipe out whatever the PIC has already typed).
-    let openLink=document.getElementById('n_driveUrlOpen');
-    if(!openLink&&urlInput){
-      openLink=document.createElement('a');
-      openLink.id='n_driveUrlOpen';openLink.className='openlink';openLink.target='_blank';openLink.rel='noopener';
-      openLink.textContent='Open ↗';
-      const label=urlInput.closest('.fld').querySelector('label');
-      if(label)label.appendChild(openLink);
-    }
-    if(openLink)openLink.href=url;
+    patchDriveLinkOpenBtn(urlInput,url);
     toast('📁 Drive folder ready — click "Open ↗" to upload documents');
   }catch(e){
     toast('Could not create Drive folder — connect Drive in Settings first');
@@ -1718,6 +1751,7 @@ function addNew(){
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
     pic:g('n_pic')||PIC_LIST[0],remark:g('n_remark').trim(),notIssuedByCh:!!(notIssuedEl&&notIssuedEl.checked),bankHolder,bankName,bankAcctNo,followup:'',followupDate:'',followupBy:'',statuses:['new'],submittedDate:'',
     enquiryDate:g('n_enquiryDate')||toISO(new Date()),refund:0,refundDate:'',gross:0,nett:0,createdAt:Date.now(),driveUrl:g('n_driveUrl').trim(),demo:false};
+  if(c.driveUrl)c.driveGeneratedAt=Date.now();
   CASES.push(c);save();clearNewCaseDraft();closeSheet();switchView('dashboard');toast('Added '+c.plate);
   logActivity('Added new case',c.plate);
   if(!c.driveUrl)autoCreateDriveFolder(c,{silent:true});
