@@ -82,6 +82,13 @@ body{
 .c-head .titles p{font-size:13px;color:var(--ink-soft);margin-top:3px}
 .c-head .today{text-align:right;font-size:12px;color:var(--ink-soft)}
 .c-head .today b{display:block;font-size:14px;color:var(--navy);font-weight:640}
+.notif-bell-btn{position:relative;border:0;background:var(--glass-strong);border:1px solid rgba(255,255,255,.7);cursor:pointer;font-size:17px;padding:9px 11px;border-radius:12px;box-shadow:var(--shadow);line-height:1}
+.notif-bell-btn:hover{background:rgba(255,255,255,.9)}
+.notif-badge{position:absolute;top:-4px;right:-4px;background:var(--e-followup);color:#fff;font-size:10px;font-weight:700;border-radius:9px;padding:1px 6px;min-width:16px;text-align:center;line-height:1.4}
+.notif-item{padding:9px 10px;border-radius:9px;font-size:12.5px;color:var(--ink);white-space:normal;line-height:1.4}
+.notif-item:hover{background:rgba(22,39,63,.06)}
+.notif-item .who{font-weight:700;color:var(--navy)}
+.notif-item .ts{font-size:10.5px;color:var(--ink-faint);margin-top:2px}
 
 .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
 .metric{border-radius:var(--radius);padding:16px 18px}
@@ -372,7 +379,13 @@ input[type=file]{display:none}
   <main class="content">
     <div class="c-head">
       <div class="titles"><h2 id="pgTitle">Dashboard</h2><p id="pgSub"></p></div>
-      <div class="today"><span>Today</span><b id="todayTxt"></b></div>
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="position:relative">
+          <button type="button" class="notif-bell-btn" onclick="toggleNotifPanel()">🔔<span class="notif-badge" id="notifBadge" style="display:none"></span></button>
+          <div id="notifPanel" class="status-menu" style="display:none;left:auto;right:0;width:300px;max-width:80vw"></div>
+        </div>
+        <div class="today"><span>Today</span><b id="todayTxt"></b></div>
+      </div>
     </div>
     <div id="demoBanner"></div>
     <div id="driveBanner"></div>
@@ -620,6 +633,8 @@ async function loadFromServer(){
   const u=unwrapPayload(data.data);
   CASES=u.cases;TRASH=u.trash;ACTIVITY=u.activity;TEAM_NAMES=u.teamNames;CUSTOM_TYPES=u.customTypes;
   currentRev=data.rev||0;
+  // Don't notify about pre-existing history on a fresh load — only what happens from here on.
+  seenActivityLen=ACTIVITY.length;
 }
 function save(){dirtyPending=true;if(save._t)clearTimeout(save._t);save._t=setTimeout(pushNow,600);}
 async function pushNow(){
@@ -647,7 +662,16 @@ function startPolling(){
     try{
       const {data,error}=await sb.from('endorsement_state').select('rev,data').eq('id',1).single();
       if(error||!data)return;
-      if((data.rev||0)!==currentRev){const u=unwrapPayload(data.data);CASES=u.cases;TRASH=u.trash;ACTIVITY=u.activity;TEAM_NAMES=u.teamNames;CUSTOM_TYPES=u.customTypes;currentRev=data.rev||0;render();}
+      if((data.rev||0)!==currentRev){
+        const u=unwrapPayload(data.data);
+        CASES=u.cases;TRASH=u.trash;
+        const myWho=myName()||CURRENT_USER_EMAIL||'';
+        const fresh=u.activity.slice(seenActivityLen).filter(a=>a.who!==myWho);
+        ACTIVITY=u.activity;TEAM_NAMES=u.teamNames;CUSTOM_TYPES=u.customTypes;currentRev=data.rev||0;
+        seenActivityLen=ACTIVITY.length;
+        render();
+        pushNotifs(fresh);
+      }
     }catch(e){}
   },7000);
 }
@@ -731,6 +755,45 @@ function autoFollowUp(){let ch=false;const today=toISO(new Date());
 function logActivity(action,detail){
   ACTIVITY.push({ts:nowStamp(),who:myName()||CURRENT_USER_EMAIL||'Unknown',action,detail:detail||''});
   if(ACTIVITY.length>500)ACTIVITY=ACTIVITY.slice(-500);
+  // Our own actions are already known locally the instant they happen — mark them "seen" immediately
+  // so the next poll's teammate-activity diff (see startPolling) doesn't re-notify us about ourselves.
+  seenActivityLen=ACTIVITY.length;
+}
+
+// ============================================================
+// In-app notifications — teammates' adds/edits, surfaced via the 🔔 bell (Teoh 2026-08-19).
+// Piggybacks on the Activity Log that already exists: startPolling() diffs the server's ACTIVITY
+// array against what this session has already seen and turns any new-and-not-mine entries into
+// notifications. No new backend — same Supabase poll the app already does every 7s.
+// ============================================================
+let seenActivityLen=0,recentNotifs=[],unseenNotifCount=0,notifPanelOpen=false;
+function renderNotifBadge(){
+  const b=document.getElementById('notifBadge');if(!b)return;
+  b.style.display=unseenNotifCount?'inline-block':'none';
+  b.textContent=unseenNotifCount>9?'9+':unseenNotifCount;
+}
+function toggleNotifPanel(){
+  notifPanelOpen=!notifPanelOpen;
+  const p=document.getElementById('notifPanel');if(!p)return;
+  p.style.display=notifPanelOpen?'block':'none';
+  if(notifPanelOpen){unseenNotifCount=0;renderNotifBadge();renderNotifPanelContent();}
+}
+function renderNotifPanelContent(){
+  const p=document.getElementById('notifPanel');if(!p)return;
+  p.innerHTML=`<div style="padding:6px 8px 10px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--ink-soft);letter-spacing:.4px;border-bottom:1px solid var(--line);margin-bottom:4px">Notifications</div>`+
+    (recentNotifs.length?recentNotifs.map(n=>`<div class="notif-item"><span class="who">${esc(n.who)}</span> ${esc(n.action)}${n.detail?' — '+esc(n.detail):''}<div class="ts">${esc(n.ts)}</div></div>`).join(''):
+    `<div style="padding:20px 10px;text-align:center;font-size:12px;color:var(--ink-faint)">No updates yet</div>`);
+}
+// Called from startPolling() with whatever teammates' Activity entries showed up since we last
+// checked — newest first in the panel, capped so the list doesn't grow unbounded.
+function pushNotifs(entries){
+  if(!entries.length)return;
+  recentNotifs=[...entries.slice().reverse(),...recentNotifs].slice(0,30);
+  unseenNotifCount+=entries.length;
+  renderNotifBadge();
+  if(notifPanelOpen)renderNotifPanelContent();
+  const last=entries[entries.length-1];
+  toast(`🔔 ${last.who} ${last.action}${entries.length>1?` (+${entries.length-1} more)`:''}`);
 }
 
 // ============================================================
