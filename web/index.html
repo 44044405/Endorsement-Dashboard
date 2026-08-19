@@ -1225,7 +1225,6 @@ function renderCeSheet(){
           </select></div>
           <div class="fld"><label>Policy / Vehicle No.</label><input id="ce_ref" type="text" value="${esc(c.plate)}"></div>
         </div>
-        <div class="fld"><label>Drive Link (optional — added to email body instead of an attachment)</label><input id="ce_drive" type="text" value="${esc(c.driveUrl||'')}" placeholder="paste link…"></div>
         <div class="grid2">
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ce_urgent"> Urgent case</label>
           <label id="ce_claimWrap" style="display:none;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="ce_claim"> Linked to a claim</label>
@@ -1257,7 +1256,6 @@ function generateCancelEmail(){
   const claimEl=document.getElementById('ce_claim');
   const claim=!!(claimEl&&claimEl.checked);
   const kind=document.getElementById('ce_kind').value;
-  const drive=document.getElementById('ce_drive').value.trim();
 
   const to=[...data.to,
     ...(claim&&data.to_optional_claim_linked?data.to_optional_claim_linked:[]),
@@ -1265,9 +1263,7 @@ function generateCancelEmail(){
   const cc=[...new Set([...data.cc,...(urgent?(data.cc_optional_urgent||[]):[])])];
   const subject=data.subject_template.replace('{ref}',ref);
   const bodyTemplate=kind==='followup'?(data.followup_body_template||data.body_template):data.body_template;
-  let body=bodyTemplate;
-  if(drive)body=body.replace('{signature}',`Related documents: ${drive}\n\n{signature}`);
-  body=body.replace('{signature}',kindData.signature_block);
+  const body=bodyTemplate.replace('{signature}',kindData.signature_block);
 
   document.getElementById('ce_result').innerHTML=`
     <div class="sect"><label class="h">Generated Email</label>
