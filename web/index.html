@@ -975,6 +975,19 @@ INSURER_FORM_FILE['Kurnia']=INSURER_FORM_FILE['Liberty'];
 // Reuse that link instead of creating a second folder for what's almost certainly the same request
 // re-keyed or double-clicked (Teoh 2026-08-12). A same plate+type case from an EARLIER month is a
 // genuinely separate event (e.g. this vehicle's policy got cancelled again later) — not blocked.
+// Same plate + same endorsement type already has a case created this calendar month? Blocks
+// adding a genuine duplicate case at the source (not just the Drive folder) — Teoh 2026-08-19,
+// same "this month" scoping as findThisMonthDriveUrl below (an earlier-month case for the same
+// plate+type is a separate real event, e.g. this vehicle's policy got cancelled again later).
+function findThisMonthCase(plate,type,excludeId){
+  const now=new Date();
+  return CASES.find(c=>{
+    if(c.id===excludeId||!c.createdAt)return false;
+    if((c.plate||'').trim().toUpperCase()!==plate.trim().toUpperCase()||c.type!==type)return false;
+    const d=new Date(c.createdAt);
+    return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+  });
+}
 function findThisMonthDriveUrl(plate,type,excludeId){
   const now=new Date();
   const match=CASES.find(c=>{
@@ -1805,6 +1818,13 @@ function addNew(){
   if(!g('n_plate').trim()){toast('Please enter a vehicle number');return}
   const typeSelEl=document.getElementById('n_type');
   if(typeSelEl&&typeSelEl.value===NEW_TYPE_OPT&&!g('n_typeNewInput').trim()){toast('Please type the new endorsement type name');return}
+  const newPlate=g('n_plate').trim().toUpperCase(),newType=readTypeValue('n_type')||TYPE_LIST[0];
+  const dupCase=findThisMonthCase(newPlate,newType,null);
+  if(dupCase){
+    toast('⚠️ '+newPlate+' already has a '+newType+' case this month — opening it instead');
+    clearNewCaseDraft();closeSheet();switchView('dashboard');openDetail(dupCase.id);
+    return;
+  }
   const bankHolder=g('n_bankHolder').trim(),bankName=g('n_bankName').trim(),bankAcctNo=g('n_bankAcctNo').trim();
   const notIssuedEl=document.getElementById('n_notIssuedByCh');
   const c={id:uid(),plate:g('n_plate').trim().toUpperCase(),contact:g('n_contact').trim(),type:readTypeValue('n_type')||TYPE_LIST[0],ins:readInsValue('n_ins'),
